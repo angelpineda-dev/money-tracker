@@ -1,26 +1,33 @@
-import type { Request, Response } from 'express';
-import { registerUser } from '../services/authService.ts';
+import type { NextFunction, Request, Response } from 'express';
+import { registerUser, validateLogin } from '../services/authService.ts';
 
-const register = async (req: Request, res: Response) => {
+const register = async (req: Request, res: Response, next: NextFunction) => {
     try {
 
-    const data = req.body;
+        const data = req.body;
 
-    await registerUser(data);
+        await registerUser(data);
 
-    return res.status(201).send({
-        message: 'User registered successfully'
-    });
-    
-    } catch(error) {
-        return res.status(400).json({
-            error: error.message
-        })
+        return res.status(201).send({
+            message: 'User registered successfully'
+        });
+
+    } catch (error) {
+        next(error);
     }
 };
 
-const login = (req: Request, res: Response) => {
-    res.send('User logged in successfully');
+const login = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { email, password } = req.body;
+
+        const token = await validateLogin(email, password);
+
+        return res.status(200).send(token);
+
+    } catch (error: unknown) {
+        next(error);
+    }
 };
 
 export { register, login };
