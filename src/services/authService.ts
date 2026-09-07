@@ -1,8 +1,9 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '../../generated/prisma/client.ts'
-import type { User } from "../types/authInterface.ts"
+import type { User } from "../types/auth.ts"
 import AppError from '../errors/AppError.ts';
+import { authMessages } from '../core/userMessages/auth.ts';
 
 const prisma = new PrismaClient();
 
@@ -26,7 +27,7 @@ const registerUser = async (data: User ) => {
     });
 
     if (!user) {
-        throw new AppError(400, 'Error while saving user.')
+        throw new AppError('Error while saving user.')
     }
     
     return user;
@@ -34,10 +35,15 @@ const registerUser = async (data: User ) => {
 }
 
 const validateLogin = async (email:string, password:string) => {
+    const JWT_SECRET = process.env.JWT_SECRET;
     const errorInvalidCredentials = 'Email or password do not match';
     const user = await prisma.users.findUnique({
         where: { email }
     });
+
+    if (!JWT_SECRET){
+        throw new AppError(authMessages.SERVER_MISSING_CONFIG, 500)
+    }
 
     if (!user){
         throw new AppError(errorInvalidCredentials);
@@ -52,7 +58,7 @@ const validateLogin = async (email:string, password:string) => {
     const token = jwt.sign({
         id: user.id,
         role: user.role
-    }, process.env.JWT_SECRET, { expiresIn: '4h' })
+    }, JWT_SECRET, { expiresIn: '4h' })
 
     return token;
 }
