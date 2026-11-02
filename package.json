@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node --watch src/app.ts",
     "seed": "node src/scripts/seed.ts",
+    "backfill": "node src/scripts/backfill.ts",
     "test": "node --test"
   },
   "keywords": [],
@@ -22,7 +23,9 @@
     "express-rate-limit": "^8.7.2",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "node-cron": "^4.6.0",
     "pg": "^8.23.0",
+    "yahoo-finance2": "^4.0.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -31,6 +34,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.2.0",
+    "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.21.0",
     "prisma": "^6.19.3",
     "typescript": "^7.0.2"
