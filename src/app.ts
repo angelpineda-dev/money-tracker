@@ -35,4 +35,15 @@ app.listen(port, () => {
 });
 
 import { startPriceJob } from './jobs/priceJob.ts';
+import { startReminderJob } from './jobs/reminderJob.ts';
+import { createBot } from './bot/bot.ts';
+
 startPriceJob();
+
+if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  const bot = createBot();
+  startReminderJob((text) => bot.api.sendMessage(process.env.TELEGRAM_CHAT_ID!, text, { parse_mode: 'Markdown' }));
+  bot.start().catch((e) => console.error('[bot] error al iniciar:', e));
+} else {
+  console.log('[bot] TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no configurados, bot desactivado');
+}
