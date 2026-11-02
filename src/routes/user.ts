@@ -1,21 +1,14 @@
-import Router from 'express';
-import authtenticateToken from '../middlewares/authMiddleware.ts'
-import { PrismaClient } from '../../generated/prisma/client.ts';
+import express from 'express';
+import authenticateToken from '../middlewares/authMiddleware.ts';
+import { validate } from '../middlewares/validate.ts';
+import { updateProfileSchema, changePasswordSchema } from '../validators/auth.ts';
+import { getMe, updateMe, changeMyPassword, deleteMe } from '../controllers/userController.ts';
 
-const router = Router();
-const prisma = new PrismaClient();
+const router = express.Router();
 
-router.get('/me', authtenticateToken, async (req, res, next) => {
-    const user = req?.user;
-   
-    try {
-        return res.json({
-            success: true,
-            user: user
-        });
-    } catch (error: unknown) {
-        next(error)
-    }
-})
+router.get('/me', authenticateToken, getMe);
+router.patch('/me', authenticateToken, validate(updateProfileSchema), updateMe);
+router.patch('/me/password', authenticateToken, validate(changePasswordSchema), changeMyPassword);
+router.delete('/me', authenticateToken, deleteMe);
 
 export default router;
