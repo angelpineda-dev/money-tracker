@@ -42,3 +42,67 @@ model RefreshToken {
 
   @@map("refresh_tokens")
 }
+
+enum TransactionType {
+  COMPRA
+  VENTA
+}
+
+model Asset {
+  id           Int           @id @default(autoincrement())
+  symbol       String        @unique
+  name         String
+  currency     String
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+  priceCache   PriceCache?
+  priceHistory PriceHistory[]
+  reminderLogs ReminderLog[]
+
+  @@map("assets")
+}
+
+model Transaction {
+  id             Int             @id @default(autoincrement())
+  assetId        Int
+  asset          Asset           @relation(fields: [assetId], references: [id])
+  type           TransactionType
+  operatedAt     DateTime        @db.Date
+  quantity       Decimal         @db.Decimal(18, 6)
+  pricePerShare  Decimal         @db.Decimal(18, 4)
+  fees           Decimal         @default(0) @db.Decimal(12, 4)
+  notes          String?
+  createdAt      DateTime        @default(now())
+
+  @@index([assetId, operatedAt])
+  @@map("transactions")
+}
+
+model PriceCache {
+  assetId   Int      @id
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  price     Decimal  @db.Decimal(18, 4)
+  updatedAt DateTime @updatedAt
+
+  @@map("price_cache")
+}
+
+model PriceHistory {
+  assetId    Int
+  asset      Asset    @relation(fields: [assetId], references: [id])
+  priceDate  DateTime @db.Date
+  closePrice Decimal  @db.Decimal(18, 4)
+
+  @@id([assetId, priceDate])
+  @@map("price_history")
+}
+
+model ReminderLog {
+  id      Int      @id @default(autoincrement())
+  assetId Int
+  asset   Asset    @relation(fields: [assetId], references: [id])
+  type    String
+  sentAt  DateTime @default(now())
+
+  @@map("reminders_log")
+}
