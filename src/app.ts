@@ -1,4 +1,10 @@
-import "dotenv/config"
+import { config } from "dotenv";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+config({ path: resolve(__dirname, "../prisma/.env") });
+config({ path: resolve(__dirname, "../.env") });
+
 import express, { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
