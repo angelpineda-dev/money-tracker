@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { registerUser, validateLogin, refreshAccessToken, logout, revokeUserSessions } from '../services/authService.ts';
+import { logout, refreshAccessToken, registerUser, revokeUserSessions, validateLogin } from '#services/authService.ts';
 
 const register = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -52,4 +52,4 @@ const logoutAll = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-export { register, login, refresh, logoutUser, logoutAll };
+export { login, logoutAll, logoutUser, refresh, register };

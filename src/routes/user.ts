@@ -1,8 +1,8 @@
 import express from 'express';
-import authenticateToken from '../middlewares/authMiddleware.ts';
-import { validate } from '../middlewares/validate.ts';
-import { updateProfileSchema, changePasswordSchema } from '../validators/auth.ts';
-import { getMe, updateMe, changeMyPassword, deleteMe } from '../controllers/userController.ts';
+import { changeMyPassword, deleteMe, getMe, updateMe } from '#controllers/userController.ts';
+import authenticateToken from '#middlewares/authMiddleware.ts';
+import { validate } from '#middlewares/validate.ts';
+import { changePasswordSchema, updateProfileSchema } from '#validators/auth.ts';
 
 const router = express.Router();
 

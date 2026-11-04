@@ -3,11 +3,18 @@
   "version": "1.0.0",
   "main": "app.js",
   "type": "module",
+  "imports": {
+    "#generated/*": "./generated/*",
+    "#*": "./src/*"
+  },
   "scripts": {
     "dev": "node --watch src/app.ts",
     "seed": "node src/scripts/seed.ts",
     "backfill": "node src/scripts/backfill.ts",
-    "test": "node --test"
+    "test": "node --test",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write ."
   },
   "keywords": [],
   "author": "",
@@ -30,6 +37,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.4",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

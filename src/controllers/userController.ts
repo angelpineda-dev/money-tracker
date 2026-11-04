@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { getProfile, updateProfile, changePassword, softDeleteAccount } from '../services/userService.ts';
+import { changePassword, getProfile, softDeleteAccount, updateProfile } from '#services/userService.ts';
 
 const getMe = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -37,4 +37,4 @@ const deleteMe = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-export { getMe, updateMe, changeMyPassword, deleteMe };
+export { changeMyPassword, deleteMe, getMe, updateMe };

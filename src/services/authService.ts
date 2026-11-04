@@ -1,12 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { randomUUID } from 'crypto';
-import { prisma } from '../lib/prisma.ts';
-import type { RegisterInput, LoginInput } from '../validators/auth.ts';
-import AppError from '../errors/AppError.ts';
-import { authMessages } from '../core/userMessages/auth.ts';
-import type { ReqUser } from '../types/user.ts';
-import { ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL_MS, MAX_ACTIVE_SESSIONS } from '../core/constants/sessions.ts';
+import { ACCESS_TOKEN_TTL, MAX_ACTIVE_SESSIONS, REFRESH_TOKEN_TTL_MS } from '#core/constants/sessions.ts';
+import { authMessages } from '#core/userMessages/auth.ts';
+import AppError from '#errors/AppError.ts';
+import { prisma } from '#lib/prisma.ts';
+import type { ReqUser } from '#types/user.ts';
+import type { LoginInput, RegisterInput } from '#validators/auth.ts';
 
 const registerUser = async (data: RegisterInput): Promise<void> => {
     const { password, confirmed_password: _, ...newData } = data;
@@ -20,7 +20,7 @@ const registerUser = async (data: RegisterInput): Promise<void> => {
 
     await prisma.users.create({
         data: { ...newData, password: hashedPassword },
-        select: { id: true }
+        select: { id: true },
     });
 };
 
@@ -39,7 +39,7 @@ const validateLogin = async (data: LoginInput) => {
 
     const user = await prisma.users.findUnique({ where: { email: data.email } });
 
-    if (!user || !user.active) {
+    if (!user?.active) {
         throw new AppError(errorInvalidCredentials, 401);
     }
 
@@ -56,7 +56,7 @@ const validateLogin = async (data: LoginInput) => {
         await tx.refreshToken.deleteMany({ where: { userId: user.id, expiresAt: { lte: new Date() } } });
 
         const created = await tx.refreshToken.create({
-            data: { token: refreshToken, userId: user.id, expiresAt: refreshExpiry() }
+            data: { token: refreshToken, userId: user.id, expiresAt: refreshExpiry() },
         });
 
         // Cap: keep the newest MAX_ACTIVE_SESSIONS, evict the rest (oldest first).
@@ -64,10 +64,10 @@ const validateLogin = async (data: LoginInput) => {
             where: { userId: user.id },
             orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
             skip: MAX_ACTIVE_SESSIONS,
-            select: { id: true }
+            select: { id: true },
         });
         if (overflow.length > 0) {
-            await tx.refreshToken.deleteMany({ where: { id: { in: overflow.map(s => s.id) } } });
+            await tx.refreshToken.deleteMany({ where: { id: { in: overflow.map((s) => s.id) } } });
         }
 
         return created;
@@ -91,7 +91,7 @@ const refreshAccessToken = async (refreshToken: string) => {
     }
 
     const user = await prisma.users.findUnique({ where: { id: stored.userId } });
-    if (!user || !user.active) {
+    if (!user?.active) {
         throw new AppError('User not found', 401);
     }
 
@@ -101,7 +101,7 @@ const refreshAccessToken = async (refreshToken: string) => {
     const newRefreshToken = randomUUID();
     const { count } = await prisma.refreshToken.updateMany({
         where: { token: refreshToken, expiresAt: { gt: new Date() } },
-        data: { token: newRefreshToken, expiresAt: refreshExpiry() }
+        data: { token: newRefreshToken, expiresAt: refreshExpiry() },
     });
     if (count === 0) {
         throw new AppError('Invalid or expired refresh token', 401);
@@ -121,9 +121,9 @@ const logout = async (sid: number, userId: string) => {
 // Close all of a user's sessions, optionally keeping one (e.g. the caller's).
 const revokeUserSessions = async (userId: string, exceptSid?: number) => {
     const { count } = await prisma.refreshToken.deleteMany({
-        where: { userId, ...(exceptSid !== undefined ? { id: { not: exceptSid } } : {}) }
+        where: { userId, ...(exceptSid !== undefined ? { id: { not: exceptSid } } : {}) },
     });
     return count;
 };
 
-export { registerUser, validateLogin, refreshAccessToken, logout, revokeUserSessions };
+export { logout, refreshAccessToken, registerUser, revokeUserSessions, validateLogin };

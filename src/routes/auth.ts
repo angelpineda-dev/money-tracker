@@ -1,9 +1,9 @@
 import express from 'express';
-import { login, register, refresh, logoutUser, logoutAll } from '../controllers/authController.ts';
-import { validate } from '../middlewares/validate.ts';
-import { authLimiter } from '../middlewares/rateLimiter.ts';
-import { loginSchema, registerSchema } from '../validators/auth.ts';
-import authenticateToken from '../middlewares/authMiddleware.ts';
+import { login, logoutAll, logoutUser, refresh, register } from '#controllers/authController.ts';
+import authenticateToken from '#middlewares/authMiddleware.ts';
+import { authLimiter } from '#middlewares/rateLimiter.ts';
+import { validate } from '#middlewares/validate.ts';
+import { loginSchema, registerSchema } from '#validators/auth.ts';
 
 const router = express.Router();
 

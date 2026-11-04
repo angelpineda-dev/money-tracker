@@ -1,19 +1,19 @@
 import bcrypt from 'bcrypt';
-import { prisma } from '../lib/prisma.ts';
-import type { UpdateProfileInput, ChangePasswordInput } from '../validators/auth.ts';
-import AppError from '../errors/AppError.ts';
+import AppError from '#errors/AppError.ts';
+import { prisma } from '#lib/prisma.ts';
+import type { ChangePasswordInput, UpdateProfileInput } from '#validators/auth.ts';
 import { revokeUserSessions } from './authService.ts';
 
 const PUBLIC_USER_SELECT = {
     email: true,
     name: true,
-    role: true
+    role: true,
 } as const;
 
 const getProfile = async (userId: string) => {
     const user = await prisma.users.findFirst({
         where: { id: userId, active: true },
-        select: PUBLIC_USER_SELECT
+        select: PUBLIC_USER_SELECT,
     });
 
     if (!user) {
@@ -27,7 +27,7 @@ const updateProfile = async (userId: string, data: UpdateProfileInput) => {
     const user = await prisma.users.update({
         where: { id: userId },
         data,
-        select: PUBLIC_USER_SELECT
+        select: PUBLIC_USER_SELECT,
     });
 
     return user;
@@ -36,7 +36,7 @@ const updateProfile = async (userId: string, data: UpdateProfileInput) => {
 const changePassword = async (userId: string, sid: number, data: ChangePasswordInput) => {
     const user = await prisma.users.findUnique({ where: { id: userId } });
 
-    if (!user || !user.active) {
+    if (!user?.active) {
         throw new AppError('User not found', 404);
     }
 
@@ -49,7 +49,7 @@ const changePassword = async (userId: string, sid: number, data: ChangePasswordI
 
     await prisma.users.update({
         where: { id: userId },
-        data: { password: hashedPassword }
+        data: { password: hashedPassword },
     });
 
     // Optional: log out every other device, keeping the caller's session.
@@ -61,8 +61,8 @@ const changePassword = async (userId: string, sid: number, data: ChangePasswordI
 const softDeleteAccount = async (userId: string) => {
     await prisma.users.update({
         where: { id: userId },
-        data: { deletedAt: new Date(), active: false }
+        data: { deletedAt: new Date(), active: false },
     });
 };
 
-export { getProfile, updateProfile, changePassword, softDeleteAccount };
+export { changePassword, getProfile, softDeleteAccount, updateProfile };

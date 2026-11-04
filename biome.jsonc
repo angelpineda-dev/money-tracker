@@ -1,0 +1,54 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true
+    },
+    "files": {
+        "includes": ["src/**", "test/**", "!generated"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "semicolons": "always"
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "complexity": {
+                // Its fix turns Date comparisons into Math.max(date, date), which returns a number, not a Date.
+                "useMathMinMax": "off"
+            },
+            "style": {
+                // Enforces the '#folder/...' aliases defined in package.json "imports".
+                "noRestrictedImports": {
+                    "level": "error",
+                    "options": {
+                        "patterns": [
+                            {
+                                "group": ["../**"],
+                                "message": "Use a '#folder/file.ts' alias (see package.json \"imports\") instead of a parent-relative import."
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    }
+}

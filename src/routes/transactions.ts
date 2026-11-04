@@ -1,21 +1,18 @@
-import express from "express";
-import { validate } from "../middlewares/validate.ts";
+import express from 'express';
 import {
-  createTransactionSchema,
-  updateTransactionSchema,
-} from "../validators/transactions.ts";
-import {
-  getTransactions,
-  postTransaction,
-  patchTransaction,
-  deleteTransactionHandler,
-} from "../controllers/transactionController.ts";
+    deleteTransactionHandler,
+    getTransactions,
+    patchTransaction,
+    postTransaction,
+} from '#controllers/transactionController.ts';
+import { validate } from '#middlewares/validate.ts';
+import { createTransactionSchema, updateTransactionSchema } from '#validators/transactions.ts';
 
 const router = express.Router();
 
-router.get("/", getTransactions);
-router.post("/", validate(createTransactionSchema), postTransaction);
-router.patch("/:id", validate(updateTransactionSchema), patchTransaction);
-router.delete("/:id", deleteTransactionHandler);
+router.get('/', getTransactions);
+router.post('/', validate(createTransactionSchema), postTransaction);
+router.patch('/:id', validate(updateTransactionSchema), patchTransaction);
+router.delete('/:id', deleteTransactionHandler);
 
 export default router;

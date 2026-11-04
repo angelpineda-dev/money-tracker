@@ -5,7 +5,7 @@ export const authLimiter = rateLimit({
     max: 10,
     message: { success: false, message: 'Too many requests, try again later.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
 });
 
 export const apiLimiter = rateLimit({
@@ -13,5 +13,5 @@ export const apiLimiter = rateLimit({
     max: 100,
     message: { success: false, message: 'Too many requests, try again later.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
 });

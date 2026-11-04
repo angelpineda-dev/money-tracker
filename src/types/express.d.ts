@@ -1,4 +1,4 @@
-import { ReqUser } from "./user.ts";
+import { ReqUser } from './user.ts';
 
 declare global {
     namespace Express {

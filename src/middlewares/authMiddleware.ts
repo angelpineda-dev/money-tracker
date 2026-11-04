@@ -1,19 +1,21 @@
-import type { Request, Response, NextFunction } from 'express'
+import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import AppError from '../errors/AppError.ts';
-import { prisma } from '../lib/prisma.ts';
-import { authMessages } from '../core/userMessages/auth.ts';
-import { UUID_REGEX } from '../core/constants/regex.ts';
-import { ROLES, type ReqUser, type Roles } from '../types/user.ts';
+import { UUID_REGEX } from '#core/constants/regex.ts';
+import { authMessages } from '#core/userMessages/auth.ts';
+import AppError from '#errors/AppError.ts';
+import { prisma } from '#lib/prisma.ts';
+import { type ReqUser, ROLES, type Roles } from '#types/user.ts';
 
 function isReqUser(payload: unknown): payload is ReqUser {
     if (typeof payload !== 'object' || payload === null) return false;
     const { id, role, sid } = payload as Record<string, unknown>;
-    return typeof id === 'string'
-        && UUID_REGEX.test(id)
-        && ROLES.includes(role as Roles)
-        && Number.isInteger(sid)
-        && (sid as number) > 0;
+    return (
+        typeof id === 'string' &&
+        UUID_REGEX.test(id) &&
+        ROLES.includes(role as Roles) &&
+        Number.isInteger(sid) &&
+        (sid as number) > 0
+    );
 }
 
 async function authenticateToken(req: Request, _res: Response, next: NextFunction) {
@@ -48,7 +50,7 @@ async function authenticateToken(req: Request, _res: Response, next: NextFunctio
     try {
         const session = await prisma.refreshToken.findUnique({
             where: { id: decoded.sid },
-            select: { userId: true, expiresAt: true }
+            select: { userId: true, expiresAt: true },
         });
         if (!session || session.userId !== decoded.id || session.expiresAt < new Date()) {
             return next(new AppError('Session revoked', 401));
