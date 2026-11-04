@@ -1,8 +1,10 @@
 import express from 'express';
-import { changeMyPassword, deleteMe, getMe, updateMe } from '#controllers/userController.ts';
+import { changeMyPassword, changeRole, deleteMe, getMe, updateMe } from '#controllers/userController.ts';
 import authenticateToken from '#middlewares/authMiddleware.ts';
+import { authorize } from '#middlewares/authorize.ts';
 import { validate } from '#middlewares/validate.ts';
-import { changePasswordSchema, updateProfileSchema } from '#validators/auth.ts';
+import { ROLE_MANAGERS } from '#types/user.ts';
+import { changePasswordSchema, changeRoleSchema, updateProfileSchema } from '#validators/auth.ts';
 
 const router = express.Router();
 
@@ -10,5 +12,6 @@ router.get('/me', authenticateToken, getMe);
 router.patch('/me', authenticateToken, validate(updateProfileSchema), updateMe);
 router.patch('/me/password', authenticateToken, validate(changePasswordSchema), changeMyPassword);
 router.delete('/me', authenticateToken, deleteMe);
+router.patch('/:id/role', authenticateToken, authorize(...ROLE_MANAGERS), validate(changeRoleSchema), changeRole);
 
 export default router;

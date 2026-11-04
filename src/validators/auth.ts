@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ROLES } from '#types/user.ts';
 
 const passwordRules = z
     .string()
@@ -41,7 +42,12 @@ export const changePasswordSchema = z
         path: ['confirmed_password'],
     });
 
+export const changeRoleSchema = z.object({
+    role: z.enum(ROLES, `Role must be one of: ${ROLES.join(', ')}`),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ChangeRoleInput = z.infer<typeof changeRoleSchema>;

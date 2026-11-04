@@ -1,7 +1,10 @@
 import bcrypt from 'bcrypt';
+import { UUID_REGEX } from '#core/constants/regex.ts';
+import { userMessages } from '#core/userMessages/user.ts';
 import AppError from '#errors/AppError.ts';
 import { prisma } from '#lib/prisma.ts';
-import type { ChangePasswordInput, UpdateProfileInput } from '#validators/auth.ts';
+import { outranks, type ReqUser } from '#types/user.ts';
+import type { ChangePasswordInput, ChangeRoleInput, UpdateProfileInput } from '#validators/auth.ts';
 import { revokeUserSessions } from './authService.ts';
 
 const PUBLIC_USER_SELECT = {
@@ -65,4 +68,45 @@ const softDeleteAccount = async (userId: string) => {
     });
 };
 
-export { changePassword, getProfile, softDeleteAccount, updateProfile };
+// Hierarchy rules (route already restricts callers to ROLE_MANAGERS):
+// - nobody changes their own role (avoids self-escalation or locking out the last admin);
+// - the target must rank strictly below the actor (ADMIN can't touch ADMIN/SUPER_ADMIN);
+// - the new role can't rank above the actor (ADMIN can't grant SUPER_ADMIN).
+const changeUserRole = async (actor: ReqUser, targetId: string, { role }: ChangeRoleInput) => {
+    if (!UUID_REGEX.test(targetId)) {
+        throw new AppError(userMessages.INVALID_USER_ID, 400);
+    }
+    if (actor.id === targetId) {
+        throw new AppError(userMessages.CANNOT_CHANGE_OWN_ROLE, 403);
+    }
+
+    const target = await prisma.users.findFirst({
+        where: { id: targetId, active: true },
+        select: { role: true },
+    });
+    if (!target) {
+        throw new AppError(userMessages.USER_NOT_FOUND, 404);
+    }
+    if (!outranks(actor.role, target.role)) {
+        throw new AppError(userMessages.CANNOT_MANAGE_TARGET, 403);
+    }
+    if (outranks(role, actor.role)) {
+        throw new AppError(userMessages.CANNOT_ASSIGN_ROLE, 403);
+    }
+
+    const user = await prisma.users.update({
+        where: { id: targetId },
+        data: { role },
+        select: PUBLIC_USER_SELECT,
+    });
+
+    // The role lives in the JWT, so close the target's sessions: otherwise their
+    // current access tokens keep the old role until they expire.
+    if (target.role !== role) {
+        await revokeUserSessions(targetId);
+    }
+
+    return user;
+};
+
+export { changePassword, changeUserRole, getProfile, softDeleteAccount, updateProfile };

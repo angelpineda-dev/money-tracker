@@ -452,6 +452,58 @@ paths:
         '401':
           description: Contraseña actual incorrecta
 
+  /api/user/{id}/role:
+    patch:
+      tags: [user]
+      summary: Cambiar rol de un usuario (solo ADMIN y SUPER_ADMIN)
+      description: |
+        Reglas de jerarquía: no se puede cambiar el rol propio; el usuario objetivo debe tener
+        un rol inferior al del solicitante; no se puede asignar un rol superior al propio
+        (ADMIN no puede otorgar SUPER_ADMIN). Al cambiar el rol se cierran todas las sesiones
+        del usuario objetivo para que el nuevo rol aplique de inmediato.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [SUPER_ADMIN, ADMIN, USER]
+      responses:
+        '200':
+          description: Rol actualizado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: id no es un UUID válido
+        '401':
+          description: No autenticado
+        '403':
+          description: Rol insuficiente o regla de jerarquía violada
+        '404':
+          description: Usuario no encontrado o inactivo
+        '422':
+          description: Rol inválido
+
   /api/assets:
     get:
       tags: [assets]

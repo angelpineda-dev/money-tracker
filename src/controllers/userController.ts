@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
-import { changePassword, getProfile, softDeleteAccount, updateProfile } from '#services/userService.ts';
+import { userMessages } from '#core/userMessages/user.ts';
+import { changePassword, changeUserRole, getProfile, softDeleteAccount, updateProfile } from '#services/userService.ts';
 
 const getMe = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -37,4 +38,13 @@ const deleteMe = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-export { changeMyPassword, deleteMe, getMe, updateMe };
+const changeRole = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+        const user = await changeUserRole(req.user!, req.params.id, req.body);
+        return res.status(200).json({ success: true, message: userMessages.ROLE_UPDATED, data: user });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export { changeMyPassword, changeRole, deleteMe, getMe, updateMe };
