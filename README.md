@@ -22,7 +22,8 @@ Crea tu archivo de entorno en `prisma/.env` (o `.env` en la raíz):
 DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/money_tracker"
 JWT_SECRET="un_secreto_largo_y_aleatorio"
 TELEGRAM_BOT_TOKEN=""   # opcional
-TELEGRAM_CHAT_ID=""     # opcional
+SEED_USER_EMAIL=""      # opcional, usuario demo del seed (def. demo@example.com)
+SEED_USER_PASSWORD=""   # opcional (def. Demo12345)
 ```
 
 Aplica migraciones y carga datos de ejemplo:
@@ -53,11 +54,15 @@ npm run dev
 | `PORT` | No (def. 3000) | Puerto del servidor |
 | `ALLOWED_ORIGINS` | No | CORS origins separados por coma |
 | `TELEGRAM_BOT_TOKEN` | No | Token del bot de Telegram |
-| `TELEGRAM_CHAT_ID` | No | Chat ID que puede usar el bot |
+| `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | No | Usuario dueño de los datos del seed |
 
 ## API
 
 Base: `http://localhost:3000`
+
+Todas las rutas `/api/*` excepto `register`, `login` y `refresh` requieren `Authorization: Bearer <token>`.
+Cada usuario tiene sus propios activos y operaciones: el dueño se guarda en `assets.userId`
+(las operaciones, precios y recordatorios lo heredan vía su activo). Un id de otro usuario responde 404.
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -71,16 +76,24 @@ Base: `http://localhost:3000`
 | DELETE | `/api/transactions/:id` | Eliminar operación |
 | GET | `/api/summary` | Resumen del portafolio (params: `from`, `to`) |
 | GET | `/api/assets/:id/performance` | Serie diaria de valor (params: `from`, `to`) |
-| POST | `/api/prices/refresh` | Actualizar precios desde Yahoo Finance |
+| POST | `/api/prices/refresh` | Actualizar precios desde Yahoo Finance (solo ADMIN/SUPER_ADMIN) |
 | POST | `/api/auth/register` | Registrar usuario |
 | POST | `/api/auth/login` | Login |
+| POST | `/api/user/me/telegram/link-code` | Código de un solo uso (10 min) para vincular Telegram |
+| DELETE | `/api/user/me/telegram` | Desvincular Telegram |
 
 ## Bot de Telegram
 
-El bot solo responde al `TELEGRAM_CHAT_ID` configurado.
+Cada usuario vincula su propio chat:
+
+1. `POST /api/user/me/telegram/link-code` → `{ code, expiresAt }`.
+2. En Telegram, envía `/link CÓDIGO` al bot.
+
+Un chat sin vincular solo acepta `/start` y `/link`. Los comandos y recordatorios usan los activos del usuario vinculado.
 
 | Comando | Descripción |
 |---|---|
+| `/link CÓDIGO` | Vincular el chat a tu cuenta |
 | `/compra SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]` | Registrar compra con confirmación |
 | `/venta SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]` | Registrar venta con confirmación |
 | `/resumen` | Ganancia y % por activo |

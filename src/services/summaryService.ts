@@ -20,12 +20,13 @@ function toTxInputs(txs: Transaction[]): TxInput[] {
     }));
 }
 
-export async function getSummary(fromParam?: string, toParam?: string) {
+export async function getSummary(userId: string, fromParam?: string, toParam?: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const toDate = toParam ? new Date(toParam) : today;
 
     const assets = await prisma.asset.findMany({
+        where: { userId },
         include: {
             transactions: { orderBy: { operatedAt: 'asc' } },
             priceCache: true,

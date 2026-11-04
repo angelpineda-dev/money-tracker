@@ -1,3 +1,4 @@
+import { portfolioMessages } from '#core/userMessages/portfolio.ts';
 import AppError from '#errors/AppError.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
@@ -13,15 +14,16 @@ function toTxInputs(txs: Transaction[]): TxInput[] {
     }));
 }
 
-export async function getPerformanceSeries(assetId: number, fromParam?: string, toParam?: string) {
-    const asset = await prisma.asset.findUnique({
-        where: { id: assetId },
+export async function getPerformanceSeries(userId: string, assetId: number, fromParam?: string, toParam?: string) {
+    const asset = await prisma.asset.findFirst({
+        where: { id: assetId, userId },
         include: {
             transactions: { orderBy: { operatedAt: 'asc' } },
             priceHistory: { orderBy: { priceDate: 'asc' } },
         },
     });
-    if (!asset) throw new AppError('Activo no encontrado', 404);
+    if (!asset) throw new AppError(portfolioMessages.ASSET_NOT_FOUND, 404);
+    const { priceHistory } = asset;
 
     const txInputs = toTxInputs(asset.transactions);
     if (txInputs.length === 0) return [];
@@ -57,7 +59,7 @@ export async function getPerformanceSeries(assetId: number, fromParam?: string, 
     function getPriceAt(dateStr: string): number | null {
         const target = new Date(dateStr).getTime();
         let best: number | null = null;
-        for (const h of asset.priceHistory) {
+        for (const h of priceHistory) {
             if (new Date(h.priceDate).getTime() <= target) {
                 best = Number(h.closePrice);
             }

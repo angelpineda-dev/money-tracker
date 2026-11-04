@@ -18,16 +18,19 @@ enum Role {
 }
 
 model Users {
-  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email          String         @unique
-  name           String
-  password       String
-  active         Boolean        @default(true)
-  role           Role           @default(USER)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  deletedAt      DateTime?
-  refreshTokens  RefreshToken[]
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String             @unique
+  name              String
+  password          String
+  active            Boolean            @default(true)
+  role              Role               @default(USER)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?
+  telegramChatId    String?            @unique
+  refreshTokens     RefreshToken[]
+  assets            Asset[]
+  telegramLinkCodes TelegramLinkCode[]
 
   @@map("users")
 }
@@ -43,36 +46,50 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+// One-time code a user sends to the Telegram bot (/link CODE) to bind their chat.
+model TelegramLinkCode {
+  code      String   @id
+  userId    String   @db.Uuid
+  user      Users    @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("telegram_link_codes")
+}
+
 enum TransactionType {
   COMPRA
   VENTA
 }
 
 model Asset {
-  id           Int           @id @default(autoincrement())
-  symbol       String        @unique
+  id           Int            @id @default(autoincrement())
+  userId       String         @db.Uuid
+  user         Users          @relation(fields: [userId], references: [id])
+  symbol       String
   name         String
   currency     String
-  createdAt    DateTime      @default(now())
+  createdAt    DateTime       @default(now())
   transactions Transaction[]
   priceCache   PriceCache?
   priceHistory PriceHistory[]
   reminderLogs ReminderLog[]
 
+  @@unique([userId, symbol])
   @@map("assets")
 }
 
 model Transaction {
-  id             Int             @id @default(autoincrement())
-  assetId        Int
-  asset          Asset           @relation(fields: [assetId], references: [id])
-  type           TransactionType
-  operatedAt     DateTime        @db.Date
-  quantity       Decimal         @db.Decimal(18, 6)
-  pricePerShare  Decimal         @db.Decimal(18, 4)
-  fees           Decimal         @default(0) @db.Decimal(12, 4)
-  notes          String?
-  createdAt      DateTime        @default(now())
+  id            Int             @id @default(autoincrement())
+  assetId       Int
+  asset         Asset           @relation(fields: [assetId], references: [id])
+  type          TransactionType
+  operatedAt    DateTime        @db.Date
+  quantity      Decimal         @db.Decimal(18, 6)
+  pricePerShare Decimal         @db.Decimal(18, 4)
+  fees          Decimal         @default(0) @db.Decimal(12, 4)
+  notes         String?
+  createdAt     DateTime        @default(now())
 
   @@index([assetId, operatedAt])
   @@map("transactions")

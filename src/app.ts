@@ -43,10 +43,13 @@ import { startReminderJob } from './jobs/reminderJob.ts';
 
 startPriceJob();
 
-if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+if (process.env.TELEGRAM_BOT_TOKEN) {
     const bot = createBot();
-    startReminderJob((text) => bot.api.sendMessage(process.env.TELEGRAM_CHAT_ID!, text, { parse_mode: 'Markdown' }));
+    // Each user links their own chat (see POST /api/user/me/telegram/link-code).
+    startReminderJob(async (chatId, text) => {
+        await bot.api.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    });
     bot.start().catch((e) => console.error('[bot] error al iniciar:', e));
 } else {
-    console.log('[bot] TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no configurados, bot desactivado');
+    console.log('[bot] TELEGRAM_BOT_TOKEN no configurado, bot desactivado');
 }

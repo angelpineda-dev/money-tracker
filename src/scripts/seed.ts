@@ -6,6 +6,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 config({ path: resolve(__dirname, '../../prisma/.env') });
 config({ path: resolve(__dirname, '../../.env') });
 
+import bcrypt from 'bcrypt';
 import { PrismaClient } from '#generated/prisma/client.ts';
 
 const prisma = new PrismaClient();
@@ -17,13 +18,24 @@ async function main() {
     await prisma.priceCache.deleteMany();
     await prisma.transaction.deleteMany();
     await prisma.asset.deleteMany();
+    await prisma.telegramLinkCode.deleteMany();
+
+    // Assets belong to a user: upsert the demo owner (password only set on create).
+    const email = process.env.SEED_USER_EMAIL ?? 'demo@example.com';
+    const password = process.env.SEED_USER_PASSWORD ?? 'Demo12345';
+    console.log(`Usuario demo: ${email}`);
+    const user = await prisma.users.upsert({
+        where: { email },
+        update: {},
+        create: { email, name: 'Demo', password: await bcrypt.hash(password, 15) },
+    });
 
     console.log('Creando activos...');
     const cuervo = await prisma.asset.create({
-        data: { symbol: 'CUERVO.MX', name: 'José Cuervo', currency: 'MXN' },
+        data: { userId: user.id, symbol: 'CUERVO.MX', name: 'José Cuervo', currency: 'MXN' },
     });
     const eww = await prisma.asset.create({
-        data: { symbol: 'EWW', name: 'iShares MSCI Mexico ETF', currency: 'USD' },
+        data: { userId: user.id, symbol: 'EWW', name: 'iShares MSCI Mexico ETF', currency: 'USD' },
     });
 
     console.log('Creando transacciones...');

@@ -1,3 +1,4 @@
+import { portfolioMessages } from '#core/userMessages/portfolio.ts';
 import AppError from '#errors/AppError.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
@@ -6,6 +7,7 @@ import type {
     ListTransactionsQuery,
     UpdateTransactionInput,
 } from '#validators/transactions.ts';
+import { getAssetById } from './assetService.ts';
 import { calcPosition, validateSell } from './calculations.ts';
 
 const TX_INCLUDE = { asset: { select: { symbol: true, currency: true } } } as const;
@@ -21,8 +23,8 @@ function toTxInputs(txs: Transaction[]) {
     }));
 }
 
-export async function listTransactions(query: ListTransactionsQuery) {
-    const where: Record<string, unknown> = {};
+export async function listTransactions(userId: string, query: ListTransactionsQuery) {
+    const where: Record<string, unknown> = { asset: { userId } };
     if (query.assetId) where.assetId = query.assetId;
     if (query.type) where.type = query.type;
     if (query.from || query.to) {
@@ -39,9 +41,8 @@ export async function listTransactions(query: ListTransactionsQuery) {
     });
 }
 
-export async function createTransaction(data: CreateTransactionInput) {
-    const asset = await prisma.asset.findUnique({ where: { id: data.assetId } });
-    if (!asset) throw new AppError('Activo no encontrado', 404);
+export async function createTransaction(userId: string, data: CreateTransactionInput) {
+    await getAssetById(userId, data.assetId);
 
     if (data.type === 'VENTA') {
         const existing = await prisma.transaction.findMany({ where: { assetId: data.assetId } });
@@ -63,9 +64,15 @@ export async function createTransaction(data: CreateTransactionInput) {
     });
 }
 
-export async function updateTransaction(id: number, data: UpdateTransactionInput) {
-    const tx = await prisma.transaction.findUnique({ where: { id } });
-    if (!tx) throw new AppError('Operación no encontrada', 404);
+// Owner is reached through the asset; other users' transactions answer 404.
+async function getOwnedTransaction(userId: string, id: number) {
+    const tx = await prisma.transaction.findFirst({ where: { id, asset: { userId } } });
+    if (!tx) throw new AppError(portfolioMessages.TRANSACTION_NOT_FOUND, 404);
+    return tx;
+}
+
+export async function updateTransaction(userId: string, id: number, data: UpdateTransactionInput) {
+    const tx = await getOwnedTransaction(userId, id);
 
     const merged = {
         type: data.type ?? tx.type,
@@ -102,9 +109,8 @@ export async function updateTransaction(id: number, data: UpdateTransactionInput
     });
 }
 
-export async function deleteTransaction(id: number) {
-    const tx = await prisma.transaction.findUnique({ where: { id } });
-    if (!tx) throw new AppError('Operación no encontrada', 404);
+export async function deleteTransaction(userId: string, id: number) {
+    const tx = await getOwnedTransaction(userId, id);
 
     const others = await prisma.transaction.findMany({
         where: { assetId: tx.assetId, id: { not: id } },

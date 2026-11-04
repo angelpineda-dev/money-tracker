@@ -18,47 +18,59 @@ async function main() {
         },
     });
 
+    // Assets are per user: group by symbol so each symbol is fetched once, from
+    // the earliest first transaction among the assets that share it.
+    const bySymbol = new Map<string, { assetIds: number[]; from: Date }>();
+    for (const asset of assets) {
+        if (asset.transactions.length === 0) {
+            console.log(`[backfill] ${asset.symbol} (asset ${asset.id}) sin transacciones, omitiendo`);
+            continue;
+        }
+        const first = new Date(asset.transactions[0].operatedAt);
+        const entry = bySymbol.get(asset.symbol);
+        if (entry) {
+            entry.assetIds.push(asset.id);
+            if (first < entry.from) entry.from = first;
+        } else {
+            bySymbol.set(asset.symbol, { assetIds: [asset.id], from: first });
+        }
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (const asset of assets) {
-        if (asset.transactions.length === 0) {
-            console.log(`[backfill] ${asset.symbol} sin transacciones, omitiendo`);
-            continue;
-        }
-
-        const from = new Date(asset.transactions[0].operatedAt);
-        console.log(`[backfill] ${asset.symbol} desde ${from.toISOString().split('T')[0]}`);
+    for (const [symbol, { assetIds, from }] of bySymbol) {
+        console.log(`[backfill] ${symbol} desde ${from.toISOString().split('T')[0]}`);
 
         try {
-            const bars = await yahooFinanceProvider.getDailyHistory(asset.symbol, from, today);
-            let inserted = 0;
+            const bars = await yahooFinanceProvider.getDailyHistory(symbol, from, today);
 
-            for (const bar of bars) {
-                const priceDate = new Date(bar.date);
-                priceDate.setHours(0, 0, 0, 0);
+            for (const assetId of assetIds) {
+                for (const bar of bars) {
+                    const priceDate = new Date(bar.date);
+                    priceDate.setHours(0, 0, 0, 0);
 
-                await prisma.priceHistory.upsert({
-                    where: { assetId_priceDate: { assetId: asset.id, priceDate } },
-                    update: { closePrice: bar.close },
-                    create: { assetId: asset.id, priceDate, closePrice: bar.close },
-                });
-                inserted++;
+                    await prisma.priceHistory.upsert({
+                        where: { assetId_priceDate: { assetId, priceDate } },
+                        update: { closePrice: bar.close },
+                        create: { assetId, priceDate, closePrice: bar.close },
+                    });
+                }
+
+                // Actualiza también price_cache con el último precio
+                if (bars.length > 0) {
+                    const last = bars[bars.length - 1];
+                    await prisma.priceCache.upsert({
+                        where: { assetId },
+                        update: { price: last.close },
+                        create: { assetId, price: last.close },
+                    });
+                }
             }
 
-            console.log(`[backfill] ${asset.symbol} → ${inserted} precios guardados`);
-
-            // Actualiza también price_cache con el último precio
-            if (bars.length > 0) {
-                const last = bars[bars.length - 1];
-                await prisma.priceCache.upsert({
-                    where: { assetId: asset.id },
-                    update: { price: last.close },
-                    create: { assetId: asset.id, price: last.close },
-                });
-            }
+            console.log(`[backfill] ${symbol} → ${bars.length} precios guardados en ${assetIds.length} activos`);
         } catch (err) {
-            console.error(`[backfill] error en ${asset.symbol}:`, err);
+            console.error(`[backfill] error en ${symbol}:`, err);
         }
 
         // Pausa entre símbolos para no saturar la API

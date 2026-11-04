@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { userMessages } from '#core/userMessages/user.ts';
+import { createLinkCode, unlinkChat } from '#services/telegramService.ts';
 import { changePassword, changeUserRole, getProfile, softDeleteAccount, updateProfile } from '#services/userService.ts';
 
 const getMe = async (req: Request, res: Response, next: NextFunction) => {
@@ -47,4 +48,22 @@ const changeRole = async (req: Request<{ id: string }>, res: Response, next: Nex
     }
 };
 
-export { changeMyPassword, changeRole, deleteMe, getMe, updateMe };
+const createTelegramLinkCode = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const data = await createLinkCode(req.user!.id);
+        return res.status(201).json({ success: true, data });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const unlinkTelegram = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        await unlinkChat(req.user!.id);
+        return res.status(200).json({ success: true, message: userMessages.TELEGRAM_UNLINKED });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export { changeMyPassword, changeRole, createTelegramLinkCode, deleteMe, getMe, unlinkTelegram, updateMe };

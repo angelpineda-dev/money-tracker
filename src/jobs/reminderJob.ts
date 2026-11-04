@@ -15,18 +15,25 @@ function toTxInputs(txs: Transaction[]): TxInput[] {
     }));
 }
 
-export function startReminderJob(sendMessage: (text: string) => Promise<void>) {
+export function startReminderJob(sendMessage: (chatId: string, text: string) => Promise<void>) {
     cron.schedule(
         '0 9 * * *',
         async () => {
             console.log('[reminderJob] verificando compras recientes...');
             const today = new Date();
 
+            // Only assets whose owner is active and has linked a Telegram chat.
             const assets = await prisma.asset.findMany({
-                include: { transactions: { orderBy: { operatedAt: 'asc' } } },
+                where: { user: { active: true, telegramChatId: { not: null } } },
+                include: {
+                    transactions: { orderBy: { operatedAt: 'asc' } },
+                    user: { select: { telegramChatId: true } },
+                },
             });
 
             for (const asset of assets) {
+                const chatId = asset.user.telegramChatId;
+                if (!chatId) continue;
                 const txInputs = toTxInputs(asset.transactions);
                 if (!isRecentPurchase(txInputs, today)) continue;
 
@@ -48,7 +55,7 @@ export function startReminderJob(sendMessage: (text: string) => Promise<void>) {
 
                 const dateStr = lastBuyDate.toISOString().split('T')[0];
                 try {
-                    await sendMessage(`🔔 *${asset.symbol}*: compraste el ${dateStr} (hace menos de 7 días)`);
+                    await sendMessage(chatId, `🔔 *${asset.symbol}*: compraste el ${dateStr} (hace menos de 7 días)`);
                     await prisma.reminderLog.create({
                         data: { assetId: asset.id, type: 'recent_purchase' },
                     });

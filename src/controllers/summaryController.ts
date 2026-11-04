@@ -6,7 +6,7 @@ export async function getSummaryHandler(req: Request, res: Response, next: NextF
     try {
         const from = typeof req.query.from === 'string' ? req.query.from : undefined;
         const to = typeof req.query.to === 'string' ? req.query.to : undefined;
-        const data = await getSummary(from, to);
+        const data = await getSummary(req.user!.id, from, to);
         res.json({ success: true, data });
     } catch (e) {
         next(e);
@@ -18,7 +18,7 @@ export async function getPerformanceHandler(req: Request, res: Response, next: N
         const assetId = Number(req.params.id);
         const from = typeof req.query.from === 'string' ? req.query.from : undefined;
         const to = typeof req.query.to === 'string' ? req.query.to : undefined;
-        const data = await getPerformanceSeries(assetId, from, to);
+        const data = await getPerformanceSeries(req.user!.id, assetId, from, to);
         res.json({ success: true, data });
     } catch (e) {
         next(e);

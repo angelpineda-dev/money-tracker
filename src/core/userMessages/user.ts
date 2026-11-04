@@ -5,4 +5,5 @@ export const userMessages = {
     CANNOT_MANAGE_TARGET: 'You cannot change the role of a user with equal or higher privileges',
     CANNOT_ASSIGN_ROLE: 'You cannot assign a role higher than your own',
     ROLE_UPDATED: 'Role updated successfully',
+    TELEGRAM_UNLINKED: 'Telegram chat unlinked',
 };

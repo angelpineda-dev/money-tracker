@@ -1,13 +1,21 @@
-import { Bot, InlineKeyboard } from 'grammy';
+import { Bot, type CommandContext, type Context, InlineKeyboard } from 'grammy';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
 import { isRecentPurchase } from '#services/calculations.ts';
 import { getSummary } from '#services/summaryService.ts';
+import { findUserIdByChatId, linkChat } from '#services/telegramService.ts';
 import { createTransaction } from '#services/transactionService.ts';
 
 type TxType = 'COMPRA' | 'VENTA';
 
+// userId is set by the auth middleware once the chat is linked to an account.
+type BotContext = Context & { userId?: string };
+
+// Commands that work before the chat is linked.
+const PUBLIC_COMMANDS = new Set(['start', 'link']);
+
 interface PendingTx {
+    userId: string;
     type: TxType;
     symbol: string;
     assetId: number;
@@ -20,7 +28,7 @@ interface PendingTx {
 // Almacena transacciones pendientes de confirmación en memoria
 const pending = new Map<string, PendingTx>();
 
-function parseTxArgs(text: string, type: TxType): PendingTx | string {
+function parseTxArgs(text: string, type: TxType, userId: string): PendingTx | string {
     const parts = text.trim().split(/\s+/).slice(1);
     if (parts.length < 3) {
         const cmd = type === 'COMPRA' ? 'compra' : 'venta';
@@ -39,6 +47,7 @@ function parseTxArgs(text: string, type: TxType): PendingTx | string {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(operatedAt)) return 'Fecha debe ser YYYY-MM-DD';
 
     return {
+        userId,
         type,
         symbol: symbol.toUpperCase(),
         assetId: 0,
@@ -55,23 +64,45 @@ function formatMoney(n: number, currency: string) {
 
 export function createBot() {
     const token = process.env.TELEGRAM_BOT_TOKEN;
-    const allowedChatId = process.env.TELEGRAM_CHAT_ID;
-
     if (!token) throw new Error('TELEGRAM_BOT_TOKEN no configurado');
-    if (!allowedChatId) throw new Error('TELEGRAM_CHAT_ID no configurado');
 
-    const bot = new Bot(token);
+    const bot = new Bot<BotContext>(token);
 
-    // Solo responde al chat configurado
+    // Resuelve el usuario dueño del chat; sin vínculo solo se permiten /start y /link.
     bot.use(async (ctx, next) => {
-        if (ctx.chat?.id.toString() !== allowedChatId) return;
-        await next();
+        const chatId = ctx.chat?.id.toString();
+        if (!chatId) return;
+        ctx.userId = (await findUserIdByChatId(chatId)) ?? undefined;
+        if (ctx.userId) return next();
+
+        const command = ctx.message?.text?.match(/^\/(\w+)/)?.[1];
+        if (command && PUBLIC_COMMANDS.has(command)) return next();
+        await ctx.reply('Chat no vinculado. Genera un código en la app y envía /link CÓDIGO.');
+    });
+
+    // /start
+    bot.command('start', async (ctx) => {
+        if (ctx.userId) return ctx.reply('Chat vinculado. Usa /compra, /venta, /resumen o /ultima.');
+        await ctx.reply('Para vincular tu cuenta genera un código en la app y envía /link CÓDIGO.');
+    });
+
+    // /link CÓDIGO
+    bot.command('link', async (ctx) => {
+        const code = ctx.match.trim();
+        if (!code) return ctx.reply('Uso: /link CÓDIGO');
+        try {
+            const ok = await linkChat(code, ctx.chat.id.toString());
+            await ctx.reply(ok ? '✅ Chat vinculado a tu cuenta.' : 'Código inválido o expirado.');
+        } catch (e) {
+            await ctx.reply('Error al vincular.');
+            console.error('[bot] /link error:', e);
+        }
     });
 
     // /compra SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]
     bot.command('compra', async (ctx) => {
         const text = ctx.message?.text ?? '';
-        const parsed = parseTxArgs(text, 'COMPRA');
+        const parsed = parseTxArgs(text, 'COMPRA', ctx.userId!);
         if (typeof parsed === 'string') return ctx.reply(parsed);
         await handleTxRequest(ctx, parsed);
     });
@@ -79,7 +110,7 @@ export function createBot() {
     // /venta SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]
     bot.command('venta', async (ctx) => {
         const text = ctx.message?.text ?? '';
-        const parsed = parseTxArgs(text, 'VENTA');
+        const parsed = parseTxArgs(text, 'VENTA', ctx.userId!);
         if (typeof parsed === 'string') return ctx.reply(parsed);
         await handleTxRequest(ctx, parsed);
     });
@@ -87,7 +118,7 @@ export function createBot() {
     // /resumen
     bot.command('resumen', async (ctx) => {
         try {
-            const data = await getSummary();
+            const data = await getSummary(ctx.userId!);
             if (data.length === 0) return ctx.reply('Sin activos registrados.');
 
             const lines = data.map((row) => {
@@ -111,7 +142,9 @@ export function createBot() {
         const symbol = parts[1].toUpperCase();
 
         try {
-            const asset = await prisma.asset.findUnique({ where: { symbol } });
+            const asset = await prisma.asset.findUnique({
+                where: { userId_symbol: { userId: ctx.userId!, symbol } },
+            });
             if (!asset) return ctx.reply(`Símbolo ${symbol} no encontrado.`);
 
             const lastBuy = await prisma.transaction.findFirst({
@@ -139,14 +172,15 @@ export function createBot() {
         const tx = pending.get(id);
         pending.delete(id);
 
-        if (!tx) {
+        // Pending ops are keyed by a random id; also check it belongs to this chat's user.
+        if (!tx || tx.userId !== ctx.userId) {
             await ctx.answerCallbackQuery('Operación expirada.');
             await ctx.editMessageReplyMarkup({ reply_markup: undefined });
             return;
         }
 
         try {
-            await createTransaction({
+            await createTransaction(tx.userId, {
                 assetId: tx.assetId,
                 type: tx.type,
                 operatedAt: tx.operatedAt,
@@ -177,8 +211,10 @@ export function createBot() {
     return bot;
 }
 
-async function handleTxRequest(ctx: Parameters<Parameters<Bot['command']>[1]>[0], tx: PendingTx) {
-    const asset = await prisma.asset.findUnique({ where: { symbol: tx.symbol } });
+async function handleTxRequest(ctx: CommandContext<BotContext>, tx: PendingTx) {
+    const asset = await prisma.asset.findUnique({
+        where: { userId_symbol: { userId: tx.userId, symbol: tx.symbol } },
+    });
     if (!asset) {
         return ctx.reply(`Símbolo ${tx.symbol} no encontrado. Agrega el activo primero desde la API.`);
     }

@@ -452,6 +452,49 @@ paths:
         '401':
           description: Contraseña actual incorrecta
 
+  /api/user/me/telegram/link-code:
+    post:
+      tags: [user]
+      summary: Generar código para vincular Telegram
+      description: |
+        Devuelve un código de un solo uso (10 min). Envíalo al bot con `/link CÓDIGO`.
+        Generar un código nuevo invalida el anterior.
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Código generado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            example: K7M2Q9XA
+                          expiresAt:
+                            type: string
+                            format: date-time
+        '401':
+          description: No autenticado
+
+  /api/user/me/telegram:
+    delete:
+      tags: [user]
+      summary: Desvincular Telegram
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chat desvinculado
+        '401':
+          description: No autenticado
+
   /api/user/{id}/role:
     patch:
       tags: [user]
@@ -508,6 +551,8 @@ paths:
     get:
       tags: [assets]
       summary: Listar activos
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Lista de activos ordenada por símbolo
@@ -525,6 +570,8 @@ paths:
     post:
       tags: [assets]
       summary: Crear activo
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -566,6 +613,8 @@ paths:
     patch:
       tags: [assets]
       summary: Editar activo
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -601,6 +650,8 @@ paths:
     get:
       tags: [assets]
       summary: Serie diaria de valor e invertido para gráfica
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -643,6 +694,8 @@ paths:
     get:
       tags: [transactions]
       summary: Listar operaciones
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: assetId
@@ -687,6 +740,8 @@ paths:
     post:
       tags: [transactions]
       summary: Registrar compra o venta
+      security:
+        - bearerAuth: []
       description: |
         Valida que una venta no deje la posición en negativo.
         Si `fees` se omite, se asume 0.
@@ -749,6 +804,8 @@ paths:
     patch:
       tags: [transactions]
       summary: Editar operación
+      security:
+        - bearerAuth: []
       description: Re-valida que la posición resultante no sea negativa.
       parameters:
         - in: path
@@ -791,6 +848,8 @@ paths:
     delete:
       tags: [transactions]
       summary: Eliminar operación
+      security:
+        - bearerAuth: []
       description: Verifica que la eliminación no deje la posición en negativo.
       parameters:
         - in: path
@@ -810,6 +869,8 @@ paths:
     get:
       tags: [summary]
       summary: Resumen del portafolio
+      security:
+        - bearerAuth: []
       description: |
         Por cada activo calcula posición, costo promedio, capital invertido,
         precio y valor actual, ganancia/% del rango, y flag de compra reciente.
@@ -854,10 +915,14 @@ paths:
     post:
       tags: [prices]
       summary: Actualizar precios desde Yahoo Finance
+      security:
+        - bearerAuth: []
       description: |
         Obtiene el precio actual de cada activo y hace upsert en `price_cache`
         y en `price_history` para el día de hoy. Se puede correr varias veces
         sin duplicar filas.
+        Solo ADMIN y SUPER_ADMIN. Cada símbolo se consulta una vez aunque varios
+        usuarios lo tengan; `updated` cuenta activos (filas) actualizados.
       responses:
         '200':
           description: Precios actualizados
@@ -875,3 +940,7 @@ paths:
                             type: integer
                             description: Número de activos actualizados exitosamente
                             example: 2
+        '401':
+          description: No autenticado
+        '403':
+          description: Rol insuficiente (requiere ADMIN o SUPER_ADMIN)

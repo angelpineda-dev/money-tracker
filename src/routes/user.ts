@@ -1,5 +1,13 @@
 import express from 'express';
-import { changeMyPassword, changeRole, deleteMe, getMe, updateMe } from '#controllers/userController.ts';
+import {
+    changeMyPassword,
+    changeRole,
+    createTelegramLinkCode,
+    deleteMe,
+    getMe,
+    unlinkTelegram,
+    updateMe,
+} from '#controllers/userController.ts';
 import authenticateToken from '#middlewares/authMiddleware.ts';
 import { authorize } from '#middlewares/authorize.ts';
 import { validate } from '#middlewares/validate.ts';
@@ -12,6 +20,8 @@ router.get('/me', authenticateToken, getMe);
 router.patch('/me', authenticateToken, validate(updateProfileSchema), updateMe);
 router.patch('/me/password', authenticateToken, validate(changePasswordSchema), changeMyPassword);
 router.delete('/me', authenticateToken, deleteMe);
+router.post('/me/telegram/link-code', authenticateToken, createTelegramLinkCode);
+router.delete('/me/telegram', authenticateToken, unlinkTelegram);
 router.patch('/:id/role', authenticateToken, authorize(...ROLE_MANAGERS), validate(changeRoleSchema), changeRole);
 
 export default router;
