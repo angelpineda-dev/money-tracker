@@ -1,8 +1,8 @@
 import express from 'express';
 import { postRefreshPrices } from '#controllers/priceController.ts';
+import { ROLE_MANAGERS } from '#core/constants/roles.ts';
 import authenticateToken from '#middlewares/authMiddleware.ts';
 import { authorize } from '#middlewares/authorize.ts';
-import { ROLE_MANAGERS } from '#types/user.ts';
 
 const router = express.Router();
 

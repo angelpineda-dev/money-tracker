@@ -1,10 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { UUID_REGEX } from '#core/constants/regex.ts';
+import { ROLES } from '#core/constants/roles.ts';
 import { authMessages } from '#core/userMessages/auth.ts';
 import AppError from '#errors/AppError.ts';
 import { prisma } from '#lib/prisma.ts';
-import { type ReqUser, ROLES, type Roles } from '#types/user.ts';
+import type { ReqUser, Roles } from '#types/user.ts';
 
 function isReqUser(payload: unknown): payload is ReqUser {
     if (typeof payload !== 'object' || payload === null) return false;

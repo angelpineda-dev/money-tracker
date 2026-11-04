@@ -24,6 +24,9 @@ JWT_SECRET="un_secreto_largo_y_aleatorio"
 TELEGRAM_BOT_TOKEN=""   # opcional
 SEED_USER_EMAIL=""      # opcional, usuario demo del seed (def. demo@example.com)
 SEED_USER_PASSWORD=""   # opcional (def. Demo12345)
+SUPER_ADMIN_EMAIL=""    # para npm run create-super-admin
+SUPER_ADMIN_NAME=""
+SUPER_ADMIN_PASSWORD="" # opcional; si va vacía se genera y se imprime una vez
 ```
 
 Aplica migraciones y carga datos de ejemplo:
@@ -37,6 +40,15 @@ Carga el historial de precios reales (solo una vez por activo):
 
 ```bash
 npm run backfill
+```
+
+Crea el primer super admin. Lee `SUPER_ADMIN_*` del entorno y solo actúa si aún no existe ningún SUPER_ADMIN
+(después es un no-op; más admins se crean con `PATCH /api/user/:id/role`). Nunca promueve ni cambia la contraseña
+de una cuenta existente. Si `SUPER_ADMIN_PASSWORD` va vacía se genera una contraseña segura y se imprime una sola vez;
+en producción se recomienda eso: guárdala y cámbiala tras el primer login con `PATCH /api/user/me/password`.
+
+```bash
+npm run create-super-admin
 ```
 
 Inicia el servidor:
@@ -55,6 +67,7 @@ npm run dev
 | `ALLOWED_ORIGINS` | No | CORS origins separados por coma |
 | `TELEGRAM_BOT_TOKEN` | No | Token del bot de Telegram |
 | `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | No | Usuario dueño de los datos del seed |
+| `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_NAME` / `SUPER_ADMIN_PASSWORD` | Solo para `create-super-admin` | Datos del primer SUPER_ADMIN (contraseña opcional: se genera si va vacía) |
 
 ## API
 
@@ -122,11 +135,25 @@ porcentaje = ganancia / (valor_al_inicio + compras_del_rango)
 - **No es un rendimiento ponderado por tiempo** — es un cálculo simple de ganancia absoluta sobre capital invertido en el período.
 - El costo promedio usa el método de **promedio ponderado**: `Σ(cantidad × precio + comisión) / Σcantidad` de compras únicamente.
 
+## Roles y tipos de operación
+
+Los valores de `Role` (`SUPER_ADMIN`, `ADMIN`, `USER`) y `TransactionType` (`COMPRA`, `VENTA`) se definen solo
+en `prisma/schema.prisma`. El código los usa por nombre (`ROLE.SUPER_ADMIN`, `TRANSACTION_TYPE.COMPRA`) desde
+`src/core/constants/`, que reexporta los enums generados por Prisma; nunca como texto suelto.
+
+Para añadir un valor (p. ej. un tipo de operación `DIVIDENDO`):
+
+1. Agrégalo al enum en `prisma/schema.prisma` y ejecuta `npx prisma migrate dev`.
+2. Ejecuta `npx tsc -p .`: marca cada lugar que debe decidir cómo tratarlo (los `switch` con `assertNever`,
+   el comando del bot y, para roles, el orden de jerarquía en `ROLES`).
+3. La API acepta el valor nuevo en cuanto existe la migración, así que completa el paso 2 antes de desplegar.
+
 ## Scripts
 
 ```bash
 npm run dev       # servidor con hot reload
 npm run seed      # datos de ejemplo (borra todo primero)
 npm run backfill  # carga historial real desde Yahoo Finance
+npm run create-super-admin  # crea el primer SUPER_ADMIN (no-op si ya existe uno)
 npm test          # tests unitarios (node:test)
 ```

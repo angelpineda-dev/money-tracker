@@ -1,4 +1,6 @@
-export type TxType = 'COMPRA' | 'VENTA';
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
+import { assertNever } from '#core/utils/assertNever.ts';
+import type { TxType } from '#types/transaction.ts';
 
 export interface TxInput {
     type: TxType;
@@ -20,12 +22,19 @@ export interface PerformanceResult {
 
 export function calcPosition(txs: TxInput[]): number {
     return txs.reduce((acc, tx) => {
-        return tx.type === 'COMPRA' ? acc + tx.quantity : acc - tx.quantity;
+        switch (tx.type) {
+            case TRANSACTION_TYPE.COMPRA:
+                return acc + tx.quantity;
+            case TRANSACTION_TYPE.VENTA:
+                return acc - tx.quantity;
+            default:
+                return assertNever(tx.type);
+        }
     }, 0);
 }
 
 export function calcAverageCost(txs: TxInput[]): number {
-    const buys = txs.filter((t) => t.type === 'COMPRA');
+    const buys = txs.filter((t) => t.type === TRANSACTION_TYPE.COMPRA);
     const totalQty = buys.reduce((s, t) => s + t.quantity, 0);
     if (totalQty === 0) return 0;
     const totalCost = buys.reduce((s, t) => s + t.quantity * t.pricePerShare + t.fees, 0);
@@ -34,13 +43,19 @@ export function calcAverageCost(txs: TxInput[]): number {
 
 export function calcInvested(txs: TxInput[]): number {
     return txs.reduce((acc, tx) => {
-        if (tx.type === 'COMPRA') return acc + tx.quantity * tx.pricePerShare + tx.fees;
-        return acc - (tx.quantity * tx.pricePerShare - tx.fees);
+        switch (tx.type) {
+            case TRANSACTION_TYPE.COMPRA:
+                return acc + tx.quantity * tx.pricePerShare + tx.fees;
+            case TRANSACTION_TYPE.VENTA:
+                return acc - (tx.quantity * tx.pricePerShare - tx.fees);
+            default:
+                return assertNever(tx.type);
+        }
     }, 0);
 }
 
 export function isRecentPurchase(txs: TxInput[], today: Date): boolean {
-    const buys = txs.filter((t) => t.type === 'COMPRA');
+    const buys = txs.filter((t) => t.type === TRANSACTION_TYPE.COMPRA);
     if (buys.length === 0) return false;
     const lastBuy = buys.reduce((latest, t) => (t.operatedAt > latest.operatedAt ? t : latest));
     const diffMs = today.getTime() - lastBuy.operatedAt.getTime();
@@ -86,11 +101,11 @@ export function calcPerformanceInRange(txs: TxInput[], history: PricePoint[], fr
     const rangoTxs = txs.filter((t) => t.operatedAt >= from && t.operatedAt <= to);
 
     const comprasRango = rangoTxs
-        .filter((t) => t.type === 'COMPRA')
+        .filter((t) => t.type === TRANSACTION_TYPE.COMPRA)
         .reduce((s, t) => s + t.quantity * t.pricePerShare + t.fees, 0);
 
     const ventasRango = rangoTxs
-        .filter((t) => t.type === 'VENTA')
+        .filter((t) => t.type === TRANSACTION_TYPE.VENTA)
         .reduce((s, t) => s + t.quantity * t.pricePerShare - t.fees, 0);
 
     const gain = valorFinal + ventasRango - valorInicio - comprasRango;

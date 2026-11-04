@@ -8,10 +8,10 @@ import {
     unlinkTelegram,
     updateMe,
 } from '#controllers/userController.ts';
+import { ROLE_MANAGERS } from '#core/constants/roles.ts';
 import authenticateToken from '#middlewares/authMiddleware.ts';
 import { authorize } from '#middlewares/authorize.ts';
 import { validate } from '#middlewares/validate.ts';
-import { ROLE_MANAGERS } from '#types/user.ts';
 import { changePasswordSchema, changeRoleSchema, updateProfileSchema } from '#validators/auth.ts';
 
 const router = express.Router();

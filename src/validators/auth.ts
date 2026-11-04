@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ROLES } from '#types/user.ts';
+import { ROLES } from '#core/constants/roles.ts';
 
 const passwordRules = z
     .string()

@@ -1,13 +1,15 @@
 import cron from 'node-cron';
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
 import { isRecentPurchase } from '#services/calculations.ts';
+import type { TxType } from '#types/transaction.ts';
 
-type TxInput = { type: 'COMPRA' | 'VENTA'; operatedAt: Date; quantity: number; pricePerShare: number; fees: number };
+type TxInput = { type: TxType; operatedAt: Date; quantity: number; pricePerShare: number; fees: number };
 
 function toTxInputs(txs: Transaction[]): TxInput[] {
     return txs.map((t) => ({
-        type: t.type as 'COMPRA' | 'VENTA',
+        type: t.type as TxType,
         operatedAt: new Date(t.operatedAt),
         quantity: Number(t.quantity),
         pricePerShare: Number(t.pricePerShare),
@@ -37,7 +39,7 @@ export function startReminderJob(sendMessage: (chatId: string, text: string) => 
                 const txInputs = toTxInputs(asset.transactions);
                 if (!isRecentPurchase(txInputs, today)) continue;
 
-                const buys = txInputs.filter((t) => t.type === 'COMPRA');
+                const buys = txInputs.filter((t) => t.type === TRANSACTION_TYPE.COMPRA);
                 const lastBuyDate = buys.reduce(
                     (max, t) => (t.operatedAt > max ? t.operatedAt : max),
                     buys[0].operatedAt,

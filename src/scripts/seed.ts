@@ -7,6 +7,8 @@ config({ path: resolve(__dirname, '../../prisma/.env') });
 config({ path: resolve(__dirname, '../../.env') });
 
 import bcrypt from 'bcrypt';
+import { BCRYPT_ROUNDS } from '#core/constants/security.ts';
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 import { PrismaClient } from '#generated/prisma/client.ts';
 
 const prisma = new PrismaClient();
@@ -27,7 +29,7 @@ async function main() {
     const user = await prisma.users.upsert({
         where: { email },
         update: {},
-        create: { email, name: 'Demo', password: await bcrypt.hash(password, 15) },
+        create: { email, name: 'Demo', password: await bcrypt.hash(password, BCRYPT_ROUNDS) },
     });
 
     console.log('Creando activos...');
@@ -44,7 +46,7 @@ async function main() {
         data: [
             {
                 assetId: cuervo.id,
-                type: 'COMPRA',
+                type: TRANSACTION_TYPE.COMPRA,
                 operatedAt: new Date('2025-01-10'),
                 quantity: 100,
                 pricePerShare: 32.5,
@@ -53,7 +55,7 @@ async function main() {
             },
             {
                 assetId: cuervo.id,
-                type: 'COMPRA',
+                type: TRANSACTION_TYPE.COMPRA,
                 operatedAt: new Date('2025-03-15'),
                 quantity: 200,
                 pricePerShare: 30.0,
@@ -61,7 +63,7 @@ async function main() {
             },
             {
                 assetId: cuervo.id,
-                type: 'COMPRA',
+                type: TRANSACTION_TYPE.COMPRA,
                 operatedAt: new Date('2025-06-01'),
                 quantity: 50,
                 pricePerShare: 33.0,
@@ -69,7 +71,7 @@ async function main() {
             },
             {
                 assetId: cuervo.id,
-                type: 'VENTA',
+                type: TRANSACTION_TYPE.VENTA,
                 operatedAt: new Date('2025-09-20'),
                 quantity: 100,
                 pricePerShare: 35.0,
@@ -83,7 +85,7 @@ async function main() {
         data: [
             {
                 assetId: eww.id,
-                type: 'COMPRA',
+                type: TRANSACTION_TYPE.COMPRA,
                 operatedAt: new Date('2025-02-01'),
                 quantity: 10.5,
                 pricePerShare: 58.25,
@@ -91,7 +93,7 @@ async function main() {
             },
             {
                 assetId: eww.id,
-                type: 'COMPRA',
+                type: TRANSACTION_TYPE.COMPRA,
                 operatedAt: new Date('2025-07-10'),
                 quantity: 5.25,
                 pricePerShare: 55.0,

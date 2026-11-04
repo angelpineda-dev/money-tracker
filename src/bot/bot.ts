@@ -1,12 +1,13 @@
 import { Bot, type CommandContext, type Context, InlineKeyboard } from 'grammy';
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
+import { assertNever } from '#core/utils/assertNever.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
 import { isRecentPurchase } from '#services/calculations.ts';
 import { getSummary } from '#services/summaryService.ts';
 import { findUserIdByChatId, linkChat } from '#services/telegramService.ts';
 import { createTransaction } from '#services/transactionService.ts';
-
-type TxType = 'COMPRA' | 'VENTA';
+import type { TxType } from '#types/transaction.ts';
 
 // userId is set by the auth middleware once the chat is linked to an account.
 type BotContext = Context & { userId?: string };
@@ -28,11 +29,28 @@ interface PendingTx {
 // Almacena transacciones pendientes de confirmación en memoria
 const pending = new Map<string, PendingTx>();
 
+// Bot command per transaction type; Record forces an entry for every type.
+const TX_COMMAND: Record<TxType, string> = {
+    [TRANSACTION_TYPE.COMPRA]: 'compra',
+    [TRANSACTION_TYPE.VENTA]: 'venta',
+};
+
+// Fees add to the cost of a buy and reduce the proceeds of a sale.
+function signedFees(type: TxType, fees: number): number {
+    switch (type) {
+        case TRANSACTION_TYPE.COMPRA:
+            return fees;
+        case TRANSACTION_TYPE.VENTA:
+            return -fees;
+        default:
+            return assertNever(type);
+    }
+}
+
 function parseTxArgs(text: string, type: TxType, userId: string): PendingTx | string {
     const parts = text.trim().split(/\s+/).slice(1);
     if (parts.length < 3) {
-        const cmd = type === 'COMPRA' ? 'compra' : 'venta';
-        return `Uso: /${cmd} SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]`;
+        return `Uso: /${TX_COMMAND[type]} SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]`;
     }
     const [symbol, qtyStr, priceStr, feesStr, dateStr] = parts;
     const quantity = parseFloat(qtyStr);
@@ -102,7 +120,7 @@ export function createBot() {
     // /compra SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]
     bot.command('compra', async (ctx) => {
         const text = ctx.message?.text ?? '';
-        const parsed = parseTxArgs(text, 'COMPRA', ctx.userId!);
+        const parsed = parseTxArgs(text, TRANSACTION_TYPE.COMPRA, ctx.userId!);
         if (typeof parsed === 'string') return ctx.reply(parsed);
         await handleTxRequest(ctx, parsed);
     });
@@ -110,7 +128,7 @@ export function createBot() {
     // /venta SÍMBOLO CANTIDAD PRECIO [COMISIÓN] [FECHA]
     bot.command('venta', async (ctx) => {
         const text = ctx.message?.text ?? '';
-        const parsed = parseTxArgs(text, 'VENTA', ctx.userId!);
+        const parsed = parseTxArgs(text, TRANSACTION_TYPE.VENTA, ctx.userId!);
         if (typeof parsed === 'string') return ctx.reply(parsed);
         await handleTxRequest(ctx, parsed);
     });
@@ -148,7 +166,7 @@ export function createBot() {
             if (!asset) return ctx.reply(`Símbolo ${symbol} no encontrado.`);
 
             const lastBuy = await prisma.transaction.findFirst({
-                where: { assetId: asset.id, type: 'COMPRA' },
+                where: { assetId: asset.id, type: TRANSACTION_TYPE.COMPRA },
                 orderBy: { operatedAt: 'desc' },
             });
 
@@ -229,9 +247,9 @@ async function handleTxRequest(ctx: CommandContext<BotContext>, tx: PendingTx) {
         fees: Number(t.fees),
     }));
 
-    const total = tx.quantity * tx.pricePerShare + (tx.type === 'COMPRA' ? tx.fees : -tx.fees);
+    const total = tx.quantity * tx.pricePerShare + signedFees(tx.type, tx.fees);
     const recentWarning =
-        tx.type === 'COMPRA' && isRecentPurchase(txInputs, new Date())
+        tx.type === TRANSACTION_TYPE.COMPRA && isRecentPurchase(txInputs, new Date())
             ? '\n⚠️ *Ya compraste este activo en los últimos 7 días.*'
             : '';
 

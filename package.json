@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "node --watch src/app.ts",
     "seed": "node src/scripts/seed.ts",
+    "create-super-admin": "node src/scripts/createSuperAdmin.ts",
     "backfill": "node src/scripts/backfill.ts",
     "test": "node --test",
     "lint": "biome lint .",

@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { UUID_REGEX } from '#core/constants/regex.ts';
+import { BCRYPT_ROUNDS } from '#core/constants/security.ts';
 import { userMessages } from '#core/userMessages/user.ts';
 import AppError from '#errors/AppError.ts';
 import { prisma } from '#lib/prisma.ts';
@@ -48,7 +49,7 @@ const changePassword = async (userId: string, sid: number, data: ChangePasswordI
         throw new AppError('Current password is incorrect', 400);
     }
 
-    const hashedPassword = await bcrypt.hash(data.new_password, 15);
+    const hashedPassword = await bcrypt.hash(data.new_password, BCRYPT_ROUNDS);
 
     await prisma.users.update({
         where: { id: userId },

@@ -2,11 +2,12 @@ import { portfolioMessages } from '#core/userMessages/portfolio.ts';
 import AppError from '#errors/AppError.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
+import type { TxType } from '#types/transaction.ts';
 import { calcInvested, calcPosition, type TxInput } from './calculations.ts';
 
 function toTxInputs(txs: Transaction[]): TxInput[] {
     return txs.map((t) => ({
-        type: t.type as 'COMPRA' | 'VENTA',
+        type: t.type as TxType,
         operatedAt: new Date(t.operatedAt),
         quantity: Number(t.quantity),
         pricePerShare: Number(t.pricePerShare),

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { BCRYPT_ROUNDS } from '#core/constants/security.ts';
 import { ACCESS_TOKEN_TTL, MAX_ACTIVE_SESSIONS, REFRESH_TOKEN_TTL_MS } from '#core/constants/sessions.ts';
 import { authMessages } from '#core/userMessages/auth.ts';
 import AppError from '#errors/AppError.ts';
@@ -16,7 +17,7 @@ const registerUser = async (data: RegisterInput): Promise<void> => {
         throw new AppError('Email already in use', 409);
     }
 
-    const hashedPassword = await bcrypt.hash(password, 15);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     await prisma.users.create({
         data: { ...newData, password: hashedPassword },

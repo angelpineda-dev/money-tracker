@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 
 const positiveDecimal = z.number().positive();
 const nonNegativeDecimal = z.number().min(0);
 
 export const createTransactionSchema = z.object({
     assetId: z.number().int().positive(),
-    type: z.enum(['COMPRA', 'VENTA']),
+    type: z.enum(TRANSACTION_TYPE),
     operatedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD requerido'),
     quantity: positiveDecimal,
     pricePerShare: positiveDecimal,
@@ -14,7 +15,7 @@ export const createTransactionSchema = z.object({
 });
 
 export const updateTransactionSchema = z.object({
-    type: z.enum(['COMPRA', 'VENTA']).optional(),
+    type: z.enum(TRANSACTION_TYPE).optional(),
     operatedAt: z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato YYYY-MM-DD requerido')
@@ -27,7 +28,7 @@ export const updateTransactionSchema = z.object({
 
 export const listTransactionsQuerySchema = z.object({
     assetId: z.coerce.number().int().positive().optional(),
-    type: z.enum(['COMPRA', 'VENTA']).optional(),
+    type: z.enum(TRANSACTION_TYPE).optional(),
     from: z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)

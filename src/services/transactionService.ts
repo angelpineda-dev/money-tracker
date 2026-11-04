@@ -1,7 +1,9 @@
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 import { portfolioMessages } from '#core/userMessages/portfolio.ts';
 import AppError from '#errors/AppError.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
+import type { TxType } from '#types/transaction.ts';
 import type {
     CreateTransactionInput,
     ListTransactionsQuery,
@@ -15,7 +17,7 @@ const TX_OMIT = { createdAt: true } as const;
 
 function toTxInputs(txs: Transaction[]) {
     return txs.map((t) => ({
-        type: t.type as 'COMPRA' | 'VENTA',
+        type: t.type as TxType,
         operatedAt: new Date(t.operatedAt),
         quantity: Number(t.quantity),
         pricePerShare: Number(t.pricePerShare),
@@ -44,7 +46,7 @@ export async function listTransactions(userId: string, query: ListTransactionsQu
 export async function createTransaction(userId: string, data: CreateTransactionInput) {
     await getAssetById(userId, data.assetId);
 
-    if (data.type === 'VENTA') {
+    if (data.type === TRANSACTION_TYPE.VENTA) {
         const existing = await prisma.transaction.findMany({ where: { assetId: data.assetId } });
         validateSell(toTxInputs(existing), data.quantity);
     }
@@ -90,7 +92,7 @@ export async function updateTransaction(userId: string, id: number, data: Update
     const hypothetical = [
         ...toTxInputs(others),
         {
-            type: merged.type as 'COMPRA' | 'VENTA',
+            type: merged.type as TxType,
             operatedAt: merged.operatedAt,
             quantity: merged.quantity,
             pricePerShare: merged.pricePerShare,

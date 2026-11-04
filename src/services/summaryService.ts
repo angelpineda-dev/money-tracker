@@ -1,5 +1,7 @@
+import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
+import type { TxType } from '#types/transaction.ts';
 import {
     calcAverageCost,
     calcInvested,
@@ -12,7 +14,7 @@ import {
 
 function toTxInputs(txs: Transaction[]): TxInput[] {
     return txs.map((t) => ({
-        type: t.type as 'COMPRA' | 'VENTA',
+        type: t.type as TxType,
         operatedAt: new Date(t.operatedAt),
         quantity: Number(t.quantity),
         pricePerShare: Number(t.pricePerShare),
@@ -57,7 +59,7 @@ export async function getSummary(userId: string, fromParam?: string, toParam?: s
 
         const { gain, pct } = calcPerformanceInRange(txInputs, history, fromDate, toDate);
 
-        const buys = txInputs.filter((t) => t.type === 'COMPRA');
+        const buys = txInputs.filter((t) => t.type === TRANSACTION_TYPE.COMPRA);
         const lastBuyDate =
             buys.length > 0
                 ? buys.reduce((max, t) => (t.operatedAt > max ? t.operatedAt : max), buys[0].operatedAt)
