@@ -18,7 +18,7 @@ enum Role {
 }
 
 model Users {
-  id             Int            @id @default(autoincrement())
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email          String         @unique
   name           String
   password       String
@@ -35,7 +35,7 @@ model Users {
 model RefreshToken {
   id        Int      @id @default(autoincrement())
   token     String   @unique
-  userId    Int
+  userId    String   @db.Uuid
   user      Users    @relation(fields: [userId], references: [id])
   expiresAt DateTime
   createdAt DateTime @default(now())

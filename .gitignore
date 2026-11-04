@@ -1,4 +1,7 @@
 .vscode
+.playwright-mcp
+.docs
+plan.md
 node_modules/
 /generated/prisma
 

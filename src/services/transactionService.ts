@@ -8,6 +8,9 @@ import type {
 } from "../validators/transactions.ts";
 import type { Transaction } from "../../generated/prisma/client.ts";
 
+const TX_INCLUDE = { asset: { select: { symbol: true, currency: true } } } as const;
+const TX_OMIT = { createdAt: true } as const;
+
 function toTxInputs(txs: Transaction[]) {
   return txs.map((t) => ({
     type: t.type as "COMPRA" | "VENTA",
@@ -31,7 +34,8 @@ export async function listTransactions(query: ListTransactionsQuery) {
   return prisma.transaction.findMany({
     where,
     orderBy: [{ assetId: "asc" }, { operatedAt: "asc" }],
-    include: { asset: { select: { symbol: true, currency: true } } },
+    include: TX_INCLUDE,
+    omit: TX_OMIT,
   });
 }
 
@@ -54,7 +58,8 @@ export async function createTransaction(data: CreateTransactionInput) {
       fees: data.fees,
       notes: data.notes,
     },
-    include: { asset: { select: { symbol: true, currency: true } } },
+    include: TX_INCLUDE,
+    omit: TX_OMIT,
   });
 }
 
@@ -89,7 +94,8 @@ export async function updateTransaction(id: number, data: UpdateTransactionInput
   return prisma.transaction.update({
     where: { id },
     data: merged,
-    include: { asset: { select: { symbol: true, currency: true } } },
+    include: TX_INCLUDE,
+    omit: TX_OMIT,
   });
 }
 

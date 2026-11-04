@@ -2,41 +2,38 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.ts';
 import type { UpdateProfileInput, ChangePasswordInput } from '../validators/auth.ts';
 import AppError from '../errors/AppError.ts';
+import { revokeUserSessions } from './authService.ts';
 
-const SAFE_USER_SELECT = {
-    id: true,
+const PUBLIC_USER_SELECT = {
     email: true,
     name: true,
-    role: true,
-    active: true,
-    createdAt: true,
-    updatedAt: true
+    role: true
 } as const;
 
-const getProfile = async (userId: number) => {
-    const user = await prisma.users.findUnique({
-        where: { id: userId },
-        select: SAFE_USER_SELECT
+const getProfile = async (userId: string) => {
+    const user = await prisma.users.findFirst({
+        where: { id: userId, active: true },
+        select: PUBLIC_USER_SELECT
     });
 
-    if (!user || !user.active) {
+    if (!user) {
         throw new AppError('User not found', 404);
     }
 
     return user;
 };
 
-const updateProfile = async (userId: number, data: UpdateProfileInput) => {
+const updateProfile = async (userId: string, data: UpdateProfileInput) => {
     const user = await prisma.users.update({
         where: { id: userId },
         data,
-        select: SAFE_USER_SELECT
+        select: PUBLIC_USER_SELECT
     });
 
     return user;
 };
 
-const changePassword = async (userId: number, data: ChangePasswordInput) => {
+const changePassword = async (userId: string, sid: number, data: ChangePasswordInput) => {
     const user = await prisma.users.findUnique({ where: { id: userId } });
 
     if (!user || !user.active) {
@@ -54,9 +51,14 @@ const changePassword = async (userId: number, data: ChangePasswordInput) => {
         where: { id: userId },
         data: { password: hashedPassword }
     });
+
+    // Optional: log out every other device, keeping the caller's session.
+    if (data.close_sessions) {
+        await revokeUserSessions(userId, sid);
+    }
 };
 
-const softDeleteAccount = async (userId: number) => {
+const softDeleteAccount = async (userId: string) => {
     await prisma.users.update({
         where: { id: userId },
         data: { deletedAt: new Date(), active: false }

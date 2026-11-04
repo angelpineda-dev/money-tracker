@@ -1,10 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
-import { registerUser, validateLogin, refreshAccessToken, logout } from '../services/authService.ts';
+import { registerUser, validateLogin, refreshAccessToken, logout, revokeUserSessions } from '../services/authService.ts';
 
 const register = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = await registerUser(req.body);
-        return res.status(201).json({ success: true, message: 'User registered successfully', data: user });
+        await registerUser(req.body);
+        return res.status(201).json({ success: true, message: 'User registered successfully' });
     } catch (error) {
         next(error);
     }
@@ -34,14 +34,22 @@ const refresh = async (req: Request, res: Response, next: NextFunction) => {
 
 const logoutUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { refreshToken } = req.body;
-        if (refreshToken) {
-            await logout(refreshToken);
-        }
+        // Route is behind authenticateToken, so req.user carries the session id.
+        await logout(req.user!.sid, req.user!.id);
         return res.status(200).json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
         next(error);
     }
 };
 
-export { register, login, refresh, logoutUser };
+const logoutAll = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Closes every session of the user, including the caller's.
+        await revokeUserSessions(req.user!.id);
+        return res.status(200).json({ success: true, message: 'All sessions closed' });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export { register, login, refresh, logoutUser, logoutAll };

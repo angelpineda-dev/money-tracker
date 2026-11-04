@@ -1,0 +1,825 @@
+openapi: 3.1.0
+info:
+  title: Money Tracker API
+  version: 1.0.0
+  description: |
+    API personal para registrar inversiones en acciones y calcular rendimiento.
+
+    **Autenticación:** Los endpoints de `/api/user/*` requieren un JWT Bearer token.
+    Obtenlo con `POST /api/auth/login` y pásalo en el header `Authorization: Bearer <token>`.
+
+servers:
+  - url: http://localhost:3000
+    description: Desarrollo local
+
+tags:
+  - name: health
+    description: Estado del servidor
+  - name: auth
+    description: Registro, login y tokens
+  - name: user
+    description: Perfil del usuario autenticado
+  - name: assets
+    description: Activos (acciones / fondos)
+  - name: transactions
+    description: Operaciones de compra y venta
+  - name: summary
+    description: Resumen y rendimiento del portafolio
+  - name: prices
+    description: Cotizaciones desde Yahoo Finance
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Descripción del error"
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        symbol:
+          type: string
+          example: CUERVO.MX
+        name:
+          type: string
+          example: José Cuervo
+        currency:
+          type: string
+          enum: [MXN, USD]
+          example: MXN
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        assetId:
+          type: integer
+          example: 1
+        type:
+          type: string
+          enum: [COMPRA, VENTA]
+        operatedAt:
+          type: string
+          format: date
+          example: "2025-01-10"
+        quantity:
+          type: number
+          example: 100
+        pricePerShare:
+          type: number
+          example: 32.5
+        fees:
+          type: number
+          example: 45.0
+        notes:
+          type: string
+          nullable: true
+        asset:
+          type: object
+          properties:
+            symbol:
+              type: string
+            currency:
+              type: string
+
+    SummaryRow:
+      type: object
+      properties:
+        asset:
+          $ref: '#/components/schemas/Asset'
+        position:
+          type: number
+          description: Títulos actuales (compras − ventas)
+          example: 250
+        averageCost:
+          type: number
+          description: Costo promedio ponderado por título
+          example: 31.53
+        invested:
+          type: number
+          description: Capital neto invertido
+          example: 7585
+        currentPrice:
+          type: number
+          nullable: true
+          example: 34.5
+        currentValue:
+          type: number
+          nullable: true
+          example: 8625
+        gain:
+          type: number
+          description: "Ganancia del rango: valor_final + ventas_rango − valor_inicio − compras_rango"
+          example: 1040
+        gainPct:
+          type: number
+          nullable: true
+          description: "gain / (valor_inicio + compras_rango)"
+          example: 0.094
+        firstTransactionDate:
+          type: string
+          format: date
+          nullable: true
+        lastBuyDate:
+          type: string
+          format: date
+          nullable: true
+        boughtThisWeek:
+          type: boolean
+          description: Última compra hace menos de 7 días
+        feesInRange:
+          type: number
+          description: Comisiones pagadas en el rango solicitado
+        from:
+          type: string
+          format: date
+          description: Inicio del rango usado (default = primera operación)
+        to:
+          type: string
+          format: date
+
+    PerformancePoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        position:
+          type: number
+        value:
+          type: number
+          nullable: true
+        invested:
+          type: number
+        price:
+          type: number
+          nullable: true
+
+    User:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [SUPER_ADMIN, ADMIN, USER]
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Estado del servidor
+      responses:
+        '200':
+          description: Servidor activo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: OK
+
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Registrar nuevo usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, password, confirmed_password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: usuario@ejemplo.com
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+                  example: Angel Pineda
+                password:
+                  type: string
+                  minLength: 8
+                  description: Mínimo 8 chars, 1 mayúscula, 1 número
+                  example: Password1
+                confirmed_password:
+                  type: string
+                  example: Password1
+      responses:
+        '201':
+          description: Usuario creado (no devuelve datos del usuario)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '409':
+          description: Email ya registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validación fallida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Iniciar sesión
+      description: >
+        Crea una nueva sesión. Máximo 3 sesiones activas por usuario; al superar
+        el límite se elimina la más antigua. Las sesiones expiradas se limpian aquí.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: usuario@ejemplo.com
+                password:
+                  type: string
+                  example: Password1
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                            description: JWT de acceso (4h)
+                          refreshToken:
+                            type: string
+                            description: Token de refresco (7d)
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Renovar JWT con refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Nuevo JWT y nuevo refresh token (el refresh token enviado queda invalidado)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          refreshToken:
+                            type: string
+        '401':
+          description: Refresh token inválido o expirado
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Cerrar sesión (revoca la sesión del JWT)
+      description: >
+        Elimina la sesión indicada por el claim `sid` del JWT. El refresh token
+        y todos los access tokens de esa sesión dejan de ser válidos de inmediato.
+        No requiere body.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sesión cerrada
+        '401':
+          description: Token ausente, inválido, expirado o sesión ya revocada
+
+  /api/auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Cerrar todas las sesiones
+      description: >
+        Elimina todas las sesiones del usuario, incluida la actual. Todos sus
+        access y refresh tokens dejan de ser válidos de inmediato.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Todas las sesiones cerradas
+        '401':
+          description: Token ausente, inválido, expirado o sesión ya revocada
+
+  /api/user/me:
+    get:
+      tags: [user]
+      summary: Obtener perfil propio
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/User'
+        '401':
+          description: No autenticado (token ausente, inválido o expirado)
+    patch:
+      tags: [user]
+      summary: Editar perfil (nombre)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 80
+      responses:
+        '200':
+          description: Perfil actualizado
+    delete:
+      tags: [user]
+      summary: Eliminar cuenta (soft delete)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cuenta desactivada
+
+  /api/user/me/password:
+    patch:
+      tags: [user]
+      summary: Cambiar contraseña
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password, confirmed_password]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                  minLength: 8
+                  description: Mínimo 8 chars, 1 mayúscula, 1 número
+                confirmed_password:
+                  type: string
+                close_sessions:
+                  type: boolean
+                  default: false
+                  description: Si es true, cierra todas las demás sesiones del usuario (la actual se mantiene)
+      responses:
+        '200':
+          description: Contraseña actualizada
+        '401':
+          description: Contraseña actual incorrecta
+
+  /api/assets:
+    get:
+      tags: [assets]
+      summary: Listar activos
+      responses:
+        '200':
+          description: Lista de activos ordenada por símbolo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Asset'
+    post:
+      tags: [assets]
+      summary: Crear activo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, name, currency]
+              properties:
+                symbol:
+                  type: string
+                  maxLength: 20
+                  example: CUERVO.MX
+                name:
+                  type: string
+                  maxLength: 120
+                  example: José Cuervo
+                currency:
+                  type: string
+                  enum: [MXN, USD]
+                  example: MXN
+      responses:
+        '201':
+          description: Activo creado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Asset'
+        '409':
+          description: Símbolo ya existe
+        '422':
+          description: Validación fallida
+
+  /api/assets/{id}:
+    patch:
+      tags: [assets]
+      summary: Editar activo
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                  maxLength: 20
+                name:
+                  type: string
+                  maxLength: 120
+                currency:
+                  type: string
+                  enum: [MXN, USD]
+      responses:
+        '200':
+          description: Activo actualizado
+        '404':
+          description: Activo no encontrado
+        '409':
+          description: Símbolo en uso
+
+  /api/assets/{id}/performance:
+    get:
+      tags: [assets]
+      summary: Serie diaria de valor e invertido para gráfica
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          example: 1
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          description: "Inicio del rango (default: primera operación)"
+          example: "2025-01-10"
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          description: "Fin del rango (default: hoy)"
+          example: "2025-12-31"
+      responses:
+        '200':
+          description: Serie diaria de puntos del activo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PerformancePoint'
+        '404':
+          description: Activo no encontrado
+
+  /api/transactions:
+    get:
+      tags: [transactions]
+      summary: Listar operaciones
+      parameters:
+        - in: query
+          name: assetId
+          schema:
+            type: integer
+          description: Filtrar por activo
+          example: 1
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [COMPRA, VENTA]
+          description: Filtrar por tipo
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          description: Desde fecha operada
+          example: "2025-01-01"
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          description: Hasta fecha operada
+          example: "2025-12-31"
+      responses:
+        '200':
+          description: Lista de operaciones
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transaction'
+    post:
+      tags: [transactions]
+      summary: Registrar compra o venta
+      description: |
+        Valida que una venta no deje la posición en negativo.
+        Si `fees` se omite, se asume 0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, type, operatedAt, quantity, pricePerShare]
+              properties:
+                assetId:
+                  type: integer
+                  example: 1
+                type:
+                  type: string
+                  enum: [COMPRA, VENTA]
+                  example: COMPRA
+                operatedAt:
+                  type: string
+                  format: date
+                  example: "2025-01-10"
+                quantity:
+                  type: number
+                  minimum: 0.000001
+                  example: 100
+                pricePerShare:
+                  type: number
+                  minimum: 0.0001
+                  example: 32.5
+                fees:
+                  type: number
+                  minimum: 0
+                  default: 0
+                  example: 45.0
+                notes:
+                  type: string
+                  maxLength: 500
+                  example: Primera compra del año
+      responses:
+        '201':
+          description: Operación registrada
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Transaction'
+        '400':
+          description: Venta mayor a posición disponible
+        '404':
+          description: Activo no encontrado
+        '422':
+          description: Validación fallida
+
+  /api/transactions/{id}:
+    patch:
+      tags: [transactions]
+      summary: Editar operación
+      description: Re-valida que la posición resultante no sea negativa.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [COMPRA, VENTA]
+                operatedAt:
+                  type: string
+                  format: date
+                quantity:
+                  type: number
+                  minimum: 0.000001
+                pricePerShare:
+                  type: number
+                  minimum: 0.0001
+                fees:
+                  type: number
+                  minimum: 0
+                notes:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Operación actualizada
+        '400':
+          description: La edición dejaría la posición en negativo
+        '404':
+          description: Operación no encontrada
+    delete:
+      tags: [transactions]
+      summary: Eliminar operación
+      description: Verifica que la eliminación no deje la posición en negativo.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Operación eliminada
+        '400':
+          description: La eliminación dejaría la posición en negativo
+        '404':
+          description: Operación no encontrada
+
+  /api/summary:
+    get:
+      tags: [summary]
+      summary: Resumen del portafolio
+      description: |
+        Por cada activo calcula posición, costo promedio, capital invertido,
+        precio y valor actual, ganancia/% del rango, y flag de compra reciente.
+
+        **Fórmula de rendimiento:**
+        ```
+        ganancia = valor_final + ventas_rango − valor_inicio − compras_rango
+        porcentaje = ganancia / (valor_inicio + compras_rango)
+        ```
+        Si `from` es la primera operación del activo, `valor_inicio = 0`.
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+          description: "Inicio del rango de rendimiento (default: primera operación de cada activo)"
+          example: "2025-01-01"
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+          description: "Fin del rango de rendimiento (default: hoy)"
+          example: "2025-12-31"
+      responses:
+        '200':
+          description: Resumen por activo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SummaryRow'
+
+  /api/prices/refresh:
+    post:
+      tags: [prices]
+      summary: Actualizar precios desde Yahoo Finance
+      description: |
+        Obtiene el precio actual de cada activo y hace upsert en `price_cache`
+        y en `price_history` para el día de hoy. Se puede correr varias veces
+        sin duplicar filas.
+      responses:
+        '200':
+          description: Precios actualizados
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updated:
+                            type: integer
+                            description: Número de activos actualizados exitosamente
+                            example: 2

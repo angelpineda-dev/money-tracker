@@ -5,18 +5,10 @@ import { prisma } from '../lib/prisma.ts';
 import type { RegisterInput, LoginInput } from '../validators/auth.ts';
 import AppError from '../errors/AppError.ts';
 import { authMessages } from '../core/userMessages/auth.ts';
+import type { ReqUser } from '../types/user.ts';
+import { ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL_MS, MAX_ACTIVE_SESSIONS } from '../core/constants/sessions.ts';
 
-const SAFE_USER_SELECT = {
-    id: true,
-    email: true,
-    name: true,
-    role: true,
-    active: true,
-    createdAt: true,
-    updatedAt: true
-} as const;
-
-const registerUser = async (data: RegisterInput) => {
+const registerUser = async (data: RegisterInput): Promise<void> => {
     const { password, confirmed_password: _, ...newData } = data;
 
     const existing = await prisma.users.findUnique({ where: { email: data.email } });
@@ -26,13 +18,16 @@ const registerUser = async (data: RegisterInput) => {
 
     const hashedPassword = await bcrypt.hash(password, 15);
 
-    const user = await prisma.users.create({
+    await prisma.users.create({
         data: { ...newData, password: hashedPassword },
-        select: SAFE_USER_SELECT
+        select: { id: true }
     });
-
-    return user;
 };
+
+const refreshExpiry = () => new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+const signAccessToken = (payload: ReqUser, secret: string) =>
+    jwt.sign(payload, secret, { expiresIn: ACCESS_TOKEN_TTL });
 
 const validateLogin = async (data: LoginInput) => {
     const JWT_SECRET = process.env.JWT_SECRET;
@@ -53,18 +48,32 @@ const validateLogin = async (data: LoginInput) => {
         throw new AppError(errorInvalidCredentials, 401);
     }
 
-    const token = jwt.sign(
-        { id: user.id, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '15m' }
-    );
-
+    // The refresh_tokens row is the session; its id goes into the JWT as `sid`
+    // so authMiddleware can reject access tokens once the session is deleted (logout).
     const refreshToken = randomUUID();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const session = await prisma.$transaction(async (tx) => {
+        // Cleanup: drop this user's expired sessions.
+        await tx.refreshToken.deleteMany({ where: { userId: user.id, expiresAt: { lte: new Date() } } });
 
-    await prisma.refreshToken.create({
-        data: { token: refreshToken, userId: user.id, expiresAt }
+        const created = await tx.refreshToken.create({
+            data: { token: refreshToken, userId: user.id, expiresAt: refreshExpiry() }
+        });
+
+        // Cap: keep the newest MAX_ACTIVE_SESSIONS, evict the rest (oldest first).
+        const overflow = await tx.refreshToken.findMany({
+            where: { userId: user.id },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            skip: MAX_ACTIVE_SESSIONS,
+            select: { id: true }
+        });
+        if (overflow.length > 0) {
+            await tx.refreshToken.deleteMany({ where: { id: { in: overflow.map(s => s.id) } } });
+        }
+
+        return created;
     });
+
+    const token = signAccessToken({ id: user.id, role: user.role, sid: session.id }, JWT_SECRET);
 
     return { token, refreshToken };
 };
@@ -86,17 +95,35 @@ const refreshAccessToken = async (refreshToken: string) => {
         throw new AppError('User not found', 401);
     }
 
-    const token = jwt.sign(
-        { id: user.id, role: user.role },
-        JWT_SECRET,
-        { expiresIn: '15m' }
-    );
+    // Rotate in place: swap the token value but keep the row (and so the `sid`).
+    // Conditional updateMany + count check makes concurrent refreshes with the same
+    // token fail instead of both succeeding, and re-checks expiry atomically.
+    const newRefreshToken = randomUUID();
+    const { count } = await prisma.refreshToken.updateMany({
+        where: { token: refreshToken, expiresAt: { gt: new Date() } },
+        data: { token: newRefreshToken, expiresAt: refreshExpiry() }
+    });
+    if (count === 0) {
+        throw new AppError('Invalid or expired refresh token', 401);
+    }
 
-    return { token };
+    const token = signAccessToken({ id: user.id, role: user.role, sid: stored.id }, JWT_SECRET);
+
+    return { token, refreshToken: newRefreshToken };
 };
 
-const logout = async (refreshToken: string) => {
-    await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+// Deleting the session revokes its refresh token and, via the sid check in
+// authMiddleware, every access token issued for it.
+const logout = async (sid: number, userId: string) => {
+    await prisma.refreshToken.deleteMany({ where: { id: sid, userId } });
 };
 
-export { registerUser, validateLogin, refreshAccessToken, logout };
+// Close all of a user's sessions, optionally keeping one (e.g. the caller's).
+const revokeUserSessions = async (userId: string, exceptSid?: number) => {
+    const { count } = await prisma.refreshToken.deleteMany({
+        where: { userId, ...(exceptSid !== undefined ? { id: { not: exceptSid } } : {}) }
+    });
+    return count;
+};
+
+export { registerUser, validateLogin, refreshAccessToken, logout, revokeUserSessions };

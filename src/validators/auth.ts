@@ -28,7 +28,9 @@ export const updateProfileSchema = z.object({
 export const changePasswordSchema = z.object({
     current_password: z.string().min(1, 'Current password is required'),
     new_password: passwordRules,
-    confirmed_password: z.string()
+    confirmed_password: z.string(),
+    // true → close every other session of the user after the password change.
+    close_sessions: z.boolean().optional().default(false)
 }).refine(d => d.new_password === d.confirmed_password, {
     message: 'Passwords do not match',
     path: ['confirmed_password']

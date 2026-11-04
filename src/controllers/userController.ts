@@ -21,7 +21,7 @@ const updateMe = async (req: Request, res: Response, next: NextFunction) => {
 
 const changeMyPassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        await changePassword(req.user!.id, req.body);
+        await changePassword(req.user!.id, req.user!.sid, req.body);
         return res.status(200).json({ success: true, message: 'Password updated successfully' });
     } catch (error) {
         next(error);
