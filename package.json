@@ -13,6 +13,7 @@
     "create-super-admin": "node src/scripts/createSuperAdmin.ts",
     "backfill": "node src/scripts/backfill.ts",
     "test": "node --test",
+    "typecheck": "tsc -p .",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check --write ."

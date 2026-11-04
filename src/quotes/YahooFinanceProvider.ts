@@ -3,6 +3,11 @@ import type { DailyBar, LatestQuote, QuoteProvider } from './QuoteProvider.ts';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
 
+// Unvalidated daily bar: Yahoo sends `close: null` for days without trading data.
+type RawDailyRow = { date: Date; close: number | null | undefined };
+
+const hasClose = (r: RawDailyRow): r is RawDailyRow & { close: number } => r.close !== null && r.close !== undefined;
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -34,14 +39,13 @@ export const yahooFinanceProvider: QuoteProvider = {
 
     async getDailyHistory(symbol, from, to): Promise<DailyBar[]> {
         return withRetry(async () => {
-            const rows = await yf.historical(
+            // validateResult: false makes the library return `any`; type the raw rows ourselves.
+            const rows: RawDailyRow[] = await yf.historical(
                 symbol,
                 { period1: from, period2: to, interval: '1d' },
                 { validateResult: false },
             );
-            return rows
-                .filter((r) => r.close !== null && r.close !== undefined)
-                .map((r) => ({ date: r.date, close: r.close as number }));
+            return rows.filter(hasClose).map((r) => ({ date: r.date, close: r.close }));
         });
     },
 };

@@ -155,5 +155,6 @@ npm run dev       # servidor con hot reload
 npm run seed      # datos de ejemplo (borra todo primero)
 npm run backfill  # carga historial real desde Yahoo Finance
 npm run create-super-admin  # crea el primer SUPER_ADMIN (no-op si ya existe uno)
+npm run typecheck # verificación de tipos con tsc (Node no la hace al ejecutar)
 npm test          # tests unitarios (node:test)
 ```
