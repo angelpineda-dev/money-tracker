@@ -1,5 +1,5 @@
 import express from 'express';
-import { getAssets, patchAsset, postAsset } from '#controllers/assetController.ts';
+import { getAssets, getSymbolSearch, patchAsset, postAsset } from '#controllers/assetController.ts';
 import { getPerformanceHandler } from '#controllers/summaryController.ts';
 import authenticateToken from '#middlewares/authMiddleware.ts';
 import { validate } from '#middlewares/validate.ts';
@@ -11,6 +11,7 @@ const router = express.Router();
 router.use(authenticateToken);
 
 router.get('/', getAssets);
+router.get('/search', getSymbolSearch);
 router.post('/', validate(createAssetSchema), postAsset);
 router.patch('/:id', validate(updateAssetSchema), patchAsset);
 router.get('/:id/performance', getPerformanceHandler);

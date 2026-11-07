@@ -1,5 +1,22 @@
 import type { NextFunction, Request, Response } from 'express';
+import AppError from '#errors/AppError.ts';
 import { createAsset, listAssets, updateAsset } from '#services/assetService.ts';
+import { searchSymbols } from '#services/symbolSearchService.ts';
+import { symbolSearchQuerySchema } from '#validators/assets.ts';
+
+export async function getSymbolSearch(req: Request, res: Response, next: NextFunction) {
+    try {
+        // `validate` only checks the body; the query string is parsed here.
+        const parsed = symbolSearchQuerySchema.safeParse(req.query);
+        if (!parsed.success) {
+            throw new AppError(parsed.error.issues.map((i) => i.message).join(', '), 422);
+        }
+        const matches = await searchSymbols(parsed.data.q);
+        res.json({ success: true, data: matches });
+    } catch (e) {
+        next(e);
+    }
+}
 
 export async function getAssets(req: Request, res: Response, next: NextFunction) {
     try {

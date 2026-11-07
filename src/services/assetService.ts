@@ -5,8 +5,22 @@ import type { CreateAssetInput, UpdateAssetInput } from '#validators/assets.ts';
 
 const ASSET_OMIT = { createdAt: true, userId: true } as const;
 
+/** Asset row plus its cached price; `price` is a Prisma Decimal (string when serialized), so coerce it. */
+export function toAssetListItem<T extends { priceCache: { price: { toString(): string } } | null }>(
+    asset: T,
+): Omit<T, 'priceCache'> & { currentPrice: number | null } {
+    const { priceCache, ...rest } = asset;
+    return { ...rest, currentPrice: priceCache ? Number(priceCache.price.toString()) : null };
+}
+
 export async function listAssets(userId: string) {
-    return prisma.asset.findMany({ where: { userId }, orderBy: { symbol: 'asc' }, omit: ASSET_OMIT });
+    const assets = await prisma.asset.findMany({
+        where: { userId },
+        orderBy: { symbol: 'asc' },
+        omit: ASSET_OMIT,
+        include: { priceCache: { select: { price: true } } },
+    });
+    return assets.map(toAssetListItem);
 }
 
 // Assets of other users answer 404, same as missing ones, so ids don't leak ownership.

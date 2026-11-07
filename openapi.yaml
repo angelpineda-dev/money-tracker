@@ -70,6 +70,39 @@ components:
           enum: [MXN, USD]
           example: MXN
 
+    AssetWithPrice:
+      allOf:
+        - $ref: '#/components/schemas/Asset'
+        - type: object
+          properties:
+            currentPrice:
+              type: number
+              nullable: true
+              description: Último precio en caché; null si aún no se ha actualizado
+              example: 34.5
+
+    SymbolMatch:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: CUERVO.MX
+        name:
+          type: string
+          example: Becle, S.A.B. de C.V.
+        currency:
+          type: string
+          enum: [MXN, USD]
+          example: MXN
+        exchange:
+          type: string
+          description: Bolsa como la muestra Yahoo Finance
+          example: Mexico
+        type:
+          type: string
+          description: Tipo de instrumento en Yahoo (EQUITY, ETF, MUTUALFUND)
+          example: EQUITY
+
     Transaction:
       type: object
       properties:
@@ -555,7 +588,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: Lista de activos ordenada por símbolo
+          description: Lista de activos ordenada por símbolo, con su precio actual en caché
           content:
             application/json:
               schema:
@@ -566,7 +599,7 @@ paths:
                       data:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Asset'
+                          $ref: '#/components/schemas/AssetWithPrice'
     post:
       tags: [assets]
       summary: Crear activo
@@ -608,6 +641,54 @@ paths:
           description: Símbolo ya existe
         '422':
           description: Validación fallida
+
+  /api/assets/search:
+    get:
+      tags: [assets]
+      summary: Buscar símbolos en Yahoo Finance
+      description: |
+        Busca coincidencias por símbolo o nombre (acciones, ETFs y fondos) e identifica
+        la moneda de cotización. Solo devuelve resultados en monedas soportadas (MXN, USD);
+        el resto se omite. Resultados cacheados 10 minutos por consulta.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 20
+          example: cuervo
+      responses:
+        '200':
+          description: Coincidencias (puede ser lista vacía)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SymbolMatch'
+        '401':
+          description: No autenticado
+        '422':
+          description: Consulta vacía, menor a 2 o mayor a 20 caracteres
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Yahoo Finance no disponible; capturar el activo manualmente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/assets/{id}:
     patch:

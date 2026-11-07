@@ -80,8 +80,9 @@ Cada usuario tiene sus propios activos y operaciones: el dueño se guarda en `as
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/health` | Estado del servidor |
-| GET | `/api/assets` | Lista de activos |
+| GET | `/api/assets` | Lista de activos con precio actual (`currentPrice`, null si no hay) |
 | POST | `/api/assets` | Crear activo `{ symbol, name, currency }` |
+| GET | `/api/assets/search?q=` | Buscar símbolos en Yahoo Finance (solo MXN/USD, identifica moneda) |
 | PATCH | `/api/assets/:id` | Editar activo |
 | GET | `/api/transactions` | Operaciones (filtros: `assetId`, `type`, `from`, `to`) |
 | POST | `/api/transactions` | Registrar compra o venta |
