@@ -166,7 +166,11 @@ components:
           example: 8625
         gain:
           type: number
-          description: "Ganancia del rango: valor_final + ventas_rango − valor_inicio − compras_rango"
+          nullable: true
+          description: >
+            Ganancia del rango: valor_final + ventas_rango − valor_inicio − compras_rango.
+            null cuando hay posición abierta y falta el precio al inicio o al final del rango
+            (no se asume 0, para no inventar una pérdida total).
           example: 1040
         gainPct:
           type: number
@@ -603,6 +607,9 @@ paths:
     post:
       tags: [assets]
       summary: Crear activo
+      description: >
+        Tras crear el activo se intenta obtener su precio actual de Yahoo Finance (un solo intento)
+        para no esperar al cron diario; si falla, el activo se crea igual sin precio.
       security:
         - bearerAuth: []
       requestBody:

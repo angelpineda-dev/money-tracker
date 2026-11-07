@@ -2,6 +2,7 @@ import { portfolioMessages } from '#core/userMessages/portfolio.ts';
 import AppError from '#errors/AppError.ts';
 import { prisma } from '#lib/prisma.ts';
 import type { CreateAssetInput, UpdateAssetInput } from '#validators/assets.ts';
+import { fetchAndStorePrice } from './priceService.ts';
 
 const ASSET_OMIT = { createdAt: true, userId: true } as const;
 
@@ -33,7 +34,10 @@ export async function getAssetById(userId: string, id: number) {
 export async function createAsset(userId: string, data: CreateAssetInput) {
     const existing = await prisma.asset.findUnique({ where: { userId_symbol: { userId, symbol: data.symbol } } });
     if (existing) throw new AppError(portfolioMessages.symbolExists(data.symbol), 409);
-    return prisma.asset.create({ data: { ...data, userId }, omit: ASSET_OMIT });
+    const asset = await prisma.asset.create({ data: { ...data, userId }, omit: ASSET_OMIT });
+    // Fetch the first price now instead of waiting for the weekday cron; failures are swallowed.
+    await fetchAndStorePrice(asset);
+    return asset;
 }
 
 export async function updateAsset(userId: string, id: number, data: UpdateAssetInput) {

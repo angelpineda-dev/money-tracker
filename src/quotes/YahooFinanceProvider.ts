@@ -42,7 +42,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 }
 
 export const yahooFinanceProvider: QuoteProvider = {
-    async getLatest(symbol): Promise<LatestQuote> {
+    async getLatest(symbol, opts): Promise<LatestQuote> {
         return withRetry(async () => {
             const result = await yf.quote(symbol, {}, { validateResult: false });
             const price = result.regularMarketPrice;
@@ -50,7 +50,7 @@ export const yahooFinanceProvider: QuoteProvider = {
                 throw new Error(`Sin precio para ${symbol}`);
             }
             return { price, updatedAt: new Date() };
-        });
+        }, opts?.maxRetries);
     },
 
     async getDailyHistory(symbol, from, to): Promise<DailyBar[]> {

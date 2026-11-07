@@ -140,7 +140,8 @@ export function createBot() {
             if (data.length === 0) return ctx.reply('Sin activos registrados.');
 
             const lines = data.map((row) => {
-                const gainStr = row.gain >= 0 ? `+${row.gain.toFixed(2)}` : row.gain.toFixed(2);
+                const gainStr =
+                    row.gain === null ? '?' : row.gain >= 0 ? `+${row.gain.toFixed(2)}` : row.gain.toFixed(2);
                 const pctStr = row.gainPct !== null ? `(${(row.gainPct * 100).toFixed(2)}%)` : '';
                 const flag = row.boughtThisWeek ? ' 🔔' : '';
                 return `*${row.asset.symbol}*${flag}\n  Posición: ${row.position} · Precio: ${row.currentPrice ?? '?'} ${row.asset.currency}\n  Valor: ${(row.currentValue ?? 0).toFixed(2)} · Ganancia: ${gainStr} ${pctStr}`;

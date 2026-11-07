@@ -16,7 +16,8 @@ export interface PricePoint {
 }
 
 export interface PerformanceResult {
-    gain: number;
+    /** null when a held position has no price at the start or end of the range, so the gain is unknown. */
+    gain: number | null;
     pct: number | null;
 }
 
@@ -89,14 +90,20 @@ export function calcPerformanceInRange(txs: TxInput[], history: PricePoint[], fr
 
     const isDefaultFrom = firstOpDate !== null && from.getTime() === firstOpDate.getTime();
 
-    const priceAtTo = getPriceAt(history, to) ?? 0;
-    const priceAtFrom = getPriceAt(history, from) ?? 0;
+    const priceAtTo = getPriceAt(history, to);
+    const priceAtFrom = getPriceAt(history, from);
 
     const qtyAtTo = positionAt(txs, to);
     const qtyAtFrom = positionAt(txs, from);
 
-    const valorFinal = qtyAtTo * priceAtTo;
-    const valorInicio = isDefaultFrom ? 0 : qtyAtFrom * priceAtFrom;
+    // A missing price only matters while shares are held: treating it as 0 would invent a total loss.
+    const needsStartPrice = !isDefaultFrom && qtyAtFrom > 0;
+    if ((qtyAtTo > 0 && priceAtTo === null) || (needsStartPrice && priceAtFrom === null)) {
+        return { gain: null, pct: null };
+    }
+
+    const valorFinal = qtyAtTo * (priceAtTo ?? 0);
+    const valorInicio = needsStartPrice ? qtyAtFrom * (priceAtFrom ?? 0) : 0;
 
     const rangoTxs = txs.filter((t) => t.operatedAt >= from && t.operatedAt <= to);
 

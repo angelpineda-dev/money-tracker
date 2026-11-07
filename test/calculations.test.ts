@@ -124,7 +124,7 @@ describe('calcPerformanceInRange', () => {
         const to = d('2025-12-01');
         const r = calcPerformanceInRange(txs, history, from, to);
         // gain = 100*40 + 0 - 0 - (100*30+0) = 4000 - 3000 = 1000
-        assert.ok(Math.abs(r.gain - 1000) < 0.001);
+        assert.ok(Math.abs((r.gain ?? Number.NaN) - 1000) < 0.001);
     });
 
     it('rango posterior a primera operación usa precio de inicio', () => {
@@ -136,7 +136,7 @@ describe('calcPerformanceInRange', () => {
         const r = calcPerformanceInRange(txs, history, from, to);
         // valorInicio = 100*35=3500, valorFinal = 100*40=4000
         // gain = 4000 + 0 - 3500 - 0 = 500
-        assert.ok(Math.abs(r.gain - 500) < 0.001);
+        assert.ok(Math.abs((r.gain ?? Number.NaN) - 500) < 0.001);
         assert.ok(r.pct !== null && Math.abs(r.pct - 500 / 3500) < 0.0001);
     });
 
@@ -149,7 +149,7 @@ describe('calcPerformanceInRange', () => {
         const to = d('2025-08-01');
         const r = calcPerformanceInRange(txs, history, from, to);
         // gain = 10*35 - 10*30 = 350-300 = 50
-        assert.ok(Math.abs(r.gain - 50) < 0.001);
+        assert.ok(Math.abs((r.gain ?? Number.NaN) - 50) < 0.001);
     });
 
     it('venta parcial en el rango suma a ganancia', () => {
@@ -164,6 +164,46 @@ describe('calcPerformanceInRange', () => {
         // ventasRango: 50×35 = 1750
         // comprasRango: 100×30 = 3000
         // gain = 2000 + 1750 - 0 - 3000 = 750
-        assert.ok(Math.abs(r.gain - 750) < 0.001);
+        assert.ok(Math.abs((r.gain ?? Number.NaN) - 750) < 0.001);
+    });
+
+    describe('sin precio', () => {
+        const buy100: TxInput = {
+            type: TRANSACTION_TYPE.COMPRA,
+            operatedAt: d('2025-01-01'),
+            quantity: 100,
+            pricePerShare: 30,
+            fees: 0,
+        };
+
+        it('posición abierta sin ningún precio → ganancia desconocida (no pérdida total)', () => {
+            const r = calcPerformanceInRange([buy100], [], d('2025-01-01'), d('2025-12-01'));
+            assert.deepEqual(r, { gain: null, pct: null });
+        });
+
+        it('posición abierta con precio solo posterior al rango → desconocida', () => {
+            const late: PricePoint[] = [{ priceDate: d('2026-01-01'), closePrice: 40 }];
+            const r = calcPerformanceInRange([buy100], late, d('2025-01-01'), d('2025-12-01'));
+            assert.equal(r.gain, null);
+        });
+
+        it('posición cerrada sin precio → ganancia realizada', () => {
+            const sell100: TxInput = {
+                type: TRANSACTION_TYPE.VENTA,
+                operatedAt: d('2025-06-01'),
+                quantity: 100,
+                pricePerShare: 35,
+                fees: 0,
+            };
+            const r = calcPerformanceInRange([buy100, sell100], [], d('2025-01-01'), d('2025-12-01'));
+            // ventas 3500 - compras 3000
+            assert.ok(Math.abs((r.gain ?? Number.NaN) - 500) < 0.001);
+        });
+
+        it('rango que empieza después de la primera operación y sin precio inicial → desconocida', () => {
+            const onlyEnd: PricePoint[] = [{ priceDate: d('2025-12-01'), closePrice: 40 }];
+            const r = calcPerformanceInRange([buy100], onlyEnd, d('2025-06-01'), d('2025-12-01'));
+            assert.equal(r.gain, null);
+        });
     });
 });

@@ -18,7 +18,8 @@ export interface SymbolMatch {
 }
 
 export interface QuoteProvider {
-    getLatest(symbol: string): Promise<LatestQuote>;
+    /** `maxRetries` caps attempts (default 3 with backoff); interactive callers pass 1. */
+    getLatest(symbol: string, opts?: { maxRetries?: number }): Promise<LatestQuote>;
     getDailyHistory(symbol: string, from: Date, to: Date): Promise<DailyBar[]>;
     search(query: string): Promise<SymbolMatch[]>;
 }
