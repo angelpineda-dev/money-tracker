@@ -1,19 +1,8 @@
 import { portfolioMessages } from '#core/userMessages/portfolio.ts';
 import AppError from '#errors/AppError.ts';
-import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
-import type { TxType } from '#types/transaction.ts';
-import { calcInvested, calcPosition, type TxInput } from './calculations.ts';
-
-function toTxInputs(txs: Transaction[]): TxInput[] {
-    return txs.map((t) => ({
-        type: t.type as TxType,
-        operatedAt: new Date(t.operatedAt),
-        quantity: Number(t.quantity),
-        pricePerShare: Number(t.pricePerShare),
-        fees: Number(t.fees),
-    }));
-}
+import { calcInvested, calcPosition } from './calculations.ts';
+import { toTxInputs } from './txInputs.ts';
 
 export async function getPerformanceSeries(userId: string, assetId: number, fromParam?: string, toParam?: string) {
     const asset = await prisma.asset.findFirst({
@@ -26,7 +15,7 @@ export async function getPerformanceSeries(userId: string, assetId: number, from
     if (!asset) throw new AppError(portfolioMessages.ASSET_NOT_FOUND, 404);
     const { priceHistory } = asset;
 
-    const txInputs = toTxInputs(asset.transactions);
+    const txInputs = toTxInputs(asset.transactions, asset.currency);
     if (txInputs.length === 0) return [];
 
     const today = new Date();

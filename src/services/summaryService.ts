@@ -1,7 +1,5 @@
 import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
-import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
-import type { TxType } from '#types/transaction.ts';
 import {
     calcAverageCost,
     calcInvested,
@@ -9,18 +7,8 @@ import {
     calcPosition,
     isRecentPurchase,
     type PricePoint,
-    type TxInput,
 } from './calculations.ts';
-
-function toTxInputs(txs: Transaction[]): TxInput[] {
-    return txs.map((t) => ({
-        type: t.type as TxType,
-        operatedAt: new Date(t.operatedAt),
-        quantity: Number(t.quantity),
-        pricePerShare: Number(t.pricePerShare),
-        fees: Number(t.fees),
-    }));
-}
+import { toTxInputs } from './txInputs.ts';
 
 export async function getSummary(userId: string, fromParam?: string, toParam?: string) {
     const today = new Date();
@@ -38,7 +26,7 @@ export async function getSummary(userId: string, fromParam?: string, toParam?: s
     });
 
     return assets.map((asset) => {
-        const txInputs = toTxInputs(asset.transactions);
+        const txInputs = toTxInputs(asset.transactions, asset.currency);
         const history: PricePoint[] = asset.priceHistory.map((h) => ({
             priceDate: new Date(h.priceDate),
             closePrice: Number(h.closePrice),
@@ -67,12 +55,10 @@ export async function getSummary(userId: string, fromParam?: string, toParam?: s
 
         const boughtThisWeek = isRecentPurchase(txInputs, today);
 
-        const feesInRange = asset.transactions
-            .filter((t) => {
-                const d = new Date(t.operatedAt);
-                return d >= fromDate && d <= toDate;
-            })
-            .reduce((s, t) => s + Number(t.fees), 0);
+        // Commission plus IVA.
+        const feesInRange = txInputs
+            .filter((t) => t.operatedAt >= fromDate && t.operatedAt <= toDate)
+            .reduce((s, t) => s + t.fees + t.iva, 0);
 
         return {
             asset: {

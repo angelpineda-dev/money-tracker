@@ -8,6 +8,8 @@ export interface TxInput {
     quantity: number;
     pricePerShare: number;
     fees: number;
+    /** IVA on `fees`; 0 for non-MXN assets. */
+    iva: number;
 }
 
 export interface PricePoint {
@@ -38,7 +40,7 @@ export function calcAverageCost(txs: TxInput[]): number {
     const buys = txs.filter((t) => t.type === TRANSACTION_TYPE.COMPRA);
     const totalQty = buys.reduce((s, t) => s + t.quantity, 0);
     if (totalQty === 0) return 0;
-    const totalCost = buys.reduce((s, t) => s + t.quantity * t.pricePerShare + t.fees, 0);
+    const totalCost = buys.reduce((s, t) => s + t.quantity * t.pricePerShare + t.fees + t.iva, 0);
     return totalCost / totalQty;
 }
 
@@ -46,9 +48,9 @@ export function calcInvested(txs: TxInput[]): number {
     return txs.reduce((acc, tx) => {
         switch (tx.type) {
             case TRANSACTION_TYPE.COMPRA:
-                return acc + tx.quantity * tx.pricePerShare + tx.fees;
+                return acc + tx.quantity * tx.pricePerShare + tx.fees + tx.iva;
             case TRANSACTION_TYPE.VENTA:
-                return acc - (tx.quantity * tx.pricePerShare - tx.fees);
+                return acc - (tx.quantity * tx.pricePerShare - tx.fees - tx.iva);
             default:
                 return assertNever(tx.type);
         }
@@ -107,13 +109,14 @@ export function calcPerformanceInRange(txs: TxInput[], history: PricePoint[], fr
 
     const rangoTxs = txs.filter((t) => t.operatedAt >= from && t.operatedAt <= to);
 
+    // Gross of commissions and IVA, like the broker's gain; fees are reported separately.
     const comprasRango = rangoTxs
         .filter((t) => t.type === TRANSACTION_TYPE.COMPRA)
-        .reduce((s, t) => s + t.quantity * t.pricePerShare + t.fees, 0);
+        .reduce((s, t) => s + t.quantity * t.pricePerShare, 0);
 
     const ventasRango = rangoTxs
         .filter((t) => t.type === TRANSACTION_TYPE.VENTA)
-        .reduce((s, t) => s + t.quantity * t.pricePerShare - t.fees, 0);
+        .reduce((s, t) => s + t.quantity * t.pricePerShare, 0);
 
     const gain = valorFinal + ventasRango - valorInicio - comprasRango;
     const base = valorInicio + comprasRango;

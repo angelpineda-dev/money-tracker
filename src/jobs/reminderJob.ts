@@ -1,21 +1,8 @@
 import cron from 'node-cron';
 import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
-import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
 import { isRecentPurchase } from '#services/calculations.ts';
-import type { TxType } from '#types/transaction.ts';
-
-type TxInput = { type: TxType; operatedAt: Date; quantity: number; pricePerShare: number; fees: number };
-
-function toTxInputs(txs: Transaction[]): TxInput[] {
-    return txs.map((t) => ({
-        type: t.type as TxType,
-        operatedAt: new Date(t.operatedAt),
-        quantity: Number(t.quantity),
-        pricePerShare: Number(t.pricePerShare),
-        fees: Number(t.fees),
-    }));
-}
+import { toTxInputs } from '#services/txInputs.ts';
 
 export function startReminderJob(sendMessage: (chatId: string, text: string) => Promise<void>) {
     cron.schedule(
@@ -36,7 +23,7 @@ export function startReminderJob(sendMessage: (chatId: string, text: string) => 
             for (const asset of assets) {
                 const chatId = asset.user.telegramChatId;
                 if (!chatId) continue;
-                const txInputs = toTxInputs(asset.transactions);
+                const txInputs = toTxInputs(asset.transactions, asset.currency);
                 if (!isRecentPurchase(txInputs, today)) continue;
 
                 const buys = txInputs.filter((t) => t.type === TRANSACTION_TYPE.COMPRA);

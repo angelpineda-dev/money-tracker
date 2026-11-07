@@ -1,12 +1,13 @@
 import { Bot, type CommandContext, type Context, InlineKeyboard } from 'grammy';
+import { ivaOnFees } from '#core/constants/tax.ts';
 import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 import { assertNever } from '#core/utils/assertNever.ts';
-import type { Transaction } from '#generated/prisma/client.ts';
 import { prisma } from '#lib/prisma.ts';
 import { isRecentPurchase } from '#services/calculations.ts';
 import { getSummary } from '#services/summaryService.ts';
 import { findUserIdByChatId, linkChat } from '#services/telegramService.ts';
 import { createTransaction } from '#services/transactionService.ts';
+import { toTxInputs } from '#services/txInputs.ts';
 import type { TxType } from '#types/transaction.ts';
 
 // userId is set by the auth middleware once the chat is linked to an account.
@@ -174,9 +175,11 @@ export function createBot() {
             if (!lastBuy) return ctx.reply(`${symbol} no tiene compras registradas.`);
 
             const date = new Date(lastBuy.operatedAt).toISOString().split('T')[0];
-            const total = (Number(lastBuy.quantity) * Number(lastBuy.pricePerShare) + Number(lastBuy.fees)).toFixed(2);
+            const fees = Number(lastBuy.fees);
+            const iva = ivaOnFees(asset.currency, fees);
+            const total = (Number(lastBuy.quantity) * Number(lastBuy.pricePerShare) + fees + iva).toFixed(2);
             await ctx.reply(
-                `*${symbol}* — última compra\nFecha: ${date}\nCantidad: ${lastBuy.quantity}\nPrecio: ${lastBuy.pricePerShare} ${asset.currency}\nComisión: ${lastBuy.fees}\nTotal: ${total} ${asset.currency}`,
+                `*${symbol}* — última compra\nFecha: ${date}\nCantidad: ${lastBuy.quantity}\nPrecio: ${lastBuy.pricePerShare} ${asset.currency}\nComisión: ${lastBuy.fees}\nIVA: ${iva.toFixed(2)}\nTotal: ${total} ${asset.currency}`,
                 { parse_mode: 'Markdown' },
             );
         } catch (e) {
@@ -240,15 +243,10 @@ async function handleTxRequest(ctx: CommandContext<BotContext>, tx: PendingTx) {
     tx.assetId = asset.id;
 
     const txs = await prisma.transaction.findMany({ where: { assetId: asset.id } });
-    const txInputs = txs.map((t: Transaction) => ({
-        type: t.type as TxType,
-        operatedAt: new Date(t.operatedAt),
-        quantity: Number(t.quantity),
-        pricePerShare: Number(t.pricePerShare),
-        fees: Number(t.fees),
-    }));
+    const txInputs = toTxInputs(txs, asset.currency);
 
-    const total = tx.quantity * tx.pricePerShare + signedFees(tx.type, tx.fees);
+    const iva = ivaOnFees(asset.currency, tx.fees);
+    const total = tx.quantity * tx.pricePerShare + signedFees(tx.type, tx.fees + iva);
     const recentWarning =
         tx.type === TRANSACTION_TYPE.COMPRA && isRecentPurchase(txInputs, new Date())
             ? '\n⚠️ *Ya compraste este activo en los últimos 7 días.*'
@@ -260,6 +258,7 @@ async function handleTxRequest(ctx: CommandContext<BotContext>, tx: PendingTx) {
         `Cantidad: ${tx.quantity}\n` +
         `Precio: ${formatMoney(tx.pricePerShare, asset.currency)}\n` +
         `Comisión: ${formatMoney(tx.fees, asset.currency)}\n` +
+        `IVA: ${formatMoney(iva, asset.currency)}\n` +
         `Total: ${formatMoney(total, asset.currency)}` +
         recentWarning +
         '\n\n¿Confirmar?';

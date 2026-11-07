@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { CURRENCY } from '#core/constants/currencies.ts';
+import { ivaOnFees } from '#core/constants/tax.ts';
 import { TRANSACTION_TYPE } from '#core/constants/transactions.ts';
 import {
     calcAverageCost,
@@ -17,23 +19,58 @@ const d = (s: string) => new Date(s);
 describe('calcPosition', () => {
     it('suma compras', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 10, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 10,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.equal(calcPosition(txs), 100);
     });
 
     it('resta ventas', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 10, fees: 0 },
-            { type: TRANSACTION_TYPE.VENTA, operatedAt: d('2025-02-01'), quantity: 40, pricePerShare: 12, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 10,
+                fees: 0,
+                iva: 0,
+            },
+            {
+                type: TRANSACTION_TYPE.VENTA,
+                operatedAt: d('2025-02-01'),
+                quantity: 40,
+                pricePerShare: 12,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.equal(calcPosition(txs), 60);
     });
 
     it('compras fraccionadas', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 10.5, pricePerShare: 50, fees: 0 },
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-02-01'), quantity: 5.25, pricePerShare: 48, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 10.5,
+                pricePerShare: 50,
+                fees: 0,
+                iva: 0,
+            },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-02-01'),
+                quantity: 5.25,
+                pricePerShare: 48,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.ok(Math.abs(calcPosition(txs) - 15.75) < 0.0001);
     });
@@ -42,8 +79,22 @@ describe('calcPosition', () => {
 describe('calcAverageCost', () => {
     it('costo promedio ponderado con comisiones', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 30, fees: 50 },
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-02-01'), quantity: 200, pricePerShare: 35, fees: 60 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 50,
+                iva: 0,
+            },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-02-01'),
+                quantity: 200,
+                pricePerShare: 35,
+                fees: 60,
+                iva: 0,
+            },
         ];
         // (100*30+50 + 200*35+60) / 300 = (3050 + 7060) / 300 = 10110/300 = 33.7
         const expected = (100 * 30 + 50 + 200 * 35 + 60) / 300;
@@ -52,8 +103,22 @@ describe('calcAverageCost', () => {
 
     it('ventas no cambian costo promedio', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 30, fees: 0 },
-            { type: TRANSACTION_TYPE.VENTA, operatedAt: d('2025-02-01'), quantity: 50, pricePerShare: 40, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 0,
+                iva: 0,
+            },
+            {
+                type: TRANSACTION_TYPE.VENTA,
+                operatedAt: d('2025-02-01'),
+                quantity: 50,
+                pricePerShare: 40,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.equal(calcAverageCost(txs), 30);
     });
@@ -62,26 +127,69 @@ describe('calcAverageCost', () => {
 describe('calcInvested', () => {
     it('compras menos ventas netas', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 30, fees: 50 },
-            { type: TRANSACTION_TYPE.VENTA, operatedAt: d('2025-06-01'), quantity: 50, pricePerShare: 35, fees: 20 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 50,
+                iva: 0,
+            },
+            {
+                type: TRANSACTION_TYPE.VENTA,
+                operatedAt: d('2025-06-01'),
+                quantity: 50,
+                pricePerShare: 35,
+                fees: 20,
+                iva: 0,
+            },
         ];
         // compra: 100*30+50=3050 / venta recibido: 50*35-20=1730
         // invertido = 3050 - 1730 = 1320
         assert.equal(calcInvested(txs), 1320);
+    });
+
+    it('incluye el IVA de la comisión', () => {
+        const txs: TxInput[] = [
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 3,
+                pricePerShare: 15.64,
+                fees: 0.11,
+                iva: 0.0176,
+            },
+        ];
+        // 3*15.64 + 0.11 + 0.0176 = 47.0476 ≈ 47.05 del broker
+        assert.ok(Math.abs(calcInvested(txs) - 47.0476) < 0.0001);
     });
 });
 
 describe('validateSell', () => {
     it('rechaza venta mayor a posición', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 50, pricePerShare: 10, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 50,
+                pricePerShare: 10,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.throws(() => validateSell(txs, 60));
     });
 
     it('permite venta igual a posición', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 50, pricePerShare: 10, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 50,
+                pricePerShare: 10,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.doesNotThrow(() => validateSell(txs, 50));
     });
@@ -91,7 +199,14 @@ describe('isRecentPurchase', () => {
     it('true si última compra hace menos de 7 días', () => {
         const today = d('2025-11-01');
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-10-27'), quantity: 10, pricePerShare: 10, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-10-27'),
+                quantity: 10,
+                pricePerShare: 10,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.equal(isRecentPurchase(txs, today), true);
     });
@@ -99,7 +214,14 @@ describe('isRecentPurchase', () => {
     it('false si última compra hace 7 días exactos', () => {
         const today = d('2025-11-01');
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-10-25'), quantity: 10, pricePerShare: 10, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-10-25'),
+                quantity: 10,
+                pricePerShare: 10,
+                fees: 0,
+                iva: 0,
+            },
         ];
         assert.equal(isRecentPurchase(txs, today), false);
     });
@@ -118,7 +240,14 @@ describe('calcPerformanceInRange', () => {
 
     it('rango desde primera operación → valor inicial = 0', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 30, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 0,
+                iva: 0,
+            },
         ];
         const from = d('2025-01-01');
         const to = d('2025-12-01');
@@ -129,7 +258,14 @@ describe('calcPerformanceInRange', () => {
 
     it('rango posterior a primera operación usa precio de inicio', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 30, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 0,
+                iva: 0,
+            },
         ];
         const from = d('2025-06-01');
         const to = d('2025-12-01');
@@ -142,7 +278,14 @@ describe('calcPerformanceInRange', () => {
 
     it('usa último precio anterior si no hay exacto', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 10, pricePerShare: 30, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 10,
+                pricePerShare: 30,
+                fees: 0,
+                iva: 0,
+            },
         ];
         const from = d('2025-01-01');
         // fecha sin precio exacto → usa el de 2025-06-01 = 35
@@ -154,8 +297,22 @@ describe('calcPerformanceInRange', () => {
 
     it('venta parcial en el rango suma a ganancia', () => {
         const txs: TxInput[] = [
-            { type: TRANSACTION_TYPE.COMPRA, operatedAt: d('2025-01-01'), quantity: 100, pricePerShare: 30, fees: 0 },
-            { type: TRANSACTION_TYPE.VENTA, operatedAt: d('2025-06-01'), quantity: 50, pricePerShare: 35, fees: 0 },
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 0,
+                iva: 0,
+            },
+            {
+                type: TRANSACTION_TYPE.VENTA,
+                operatedAt: d('2025-06-01'),
+                quantity: 50,
+                pricePerShare: 35,
+                fees: 0,
+                iva: 0,
+            },
         ];
         const from = d('2025-01-01');
         const to = d('2025-12-01');
@@ -174,6 +331,7 @@ describe('calcPerformanceInRange', () => {
             quantity: 100,
             pricePerShare: 30,
             fees: 0,
+            iva: 0,
         };
 
         it('posición abierta sin ningún precio → ganancia desconocida (no pérdida total)', () => {
@@ -194,6 +352,7 @@ describe('calcPerformanceInRange', () => {
                 quantity: 100,
                 pricePerShare: 35,
                 fees: 0,
+                iva: 0,
             };
             const r = calcPerformanceInRange([buy100, sell100], [], d('2025-01-01'), d('2025-12-01'));
             // ventas 3500 - compras 3000
@@ -205,5 +364,32 @@ describe('calcPerformanceInRange', () => {
             const r = calcPerformanceInRange([buy100], onlyEnd, d('2025-06-01'), d('2025-12-01'));
             assert.equal(r.gain, null);
         });
+    });
+
+    it('ganancia bruta: no resta comisión ni IVA, el % usa el costo bruto', () => {
+        const txs: TxInput[] = [
+            {
+                type: TRANSACTION_TYPE.COMPRA,
+                operatedAt: d('2025-01-01'),
+                quantity: 100,
+                pricePerShare: 30,
+                fees: 50,
+                iva: 8,
+            },
+        ];
+        const r = calcPerformanceInRange(txs, history, d('2025-01-01'), d('2025-12-01'));
+        // gain = 100*40 - 100*30 = 1000 (sin 58 de costos); pct = 1000 / 3000
+        assert.ok(Math.abs((r.gain ?? Number.NaN) - 1000) < 0.001);
+        assert.ok(Math.abs((r.pct ?? Number.NaN) - 1000 / 3000) < 0.0001);
+    });
+});
+
+describe('ivaOnFees', () => {
+    it('16% de la comisión en MXN', () => {
+        assert.ok(Math.abs(ivaOnFees(CURRENCY.MXN, 0.11) - 0.0176) < 1e-9);
+    });
+
+    it('0 en USD', () => {
+        assert.equal(ivaOnFees(CURRENCY.USD, 5), 0);
     });
 });
