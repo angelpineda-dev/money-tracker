@@ -41,12 +41,24 @@ export async function createAsset(userId: string, data: CreateAssetInput) {
 }
 
 export async function updateAsset(userId: string, id: number, data: UpdateAssetInput) {
-    await getAssetById(userId, id);
+    const current = await getAssetById(userId, id);
     if (data.symbol) {
         const conflict = await prisma.asset.findUnique({
             where: { userId_symbol: { userId, symbol: data.symbol } },
         });
         if (conflict && conflict.id !== id) throw new AppError(portfolioMessages.symbolExists(data.symbol), 409);
     }
-    return prisma.asset.update({ where: { id }, data, omit: ASSET_OMIT });
+    const quoteChanged =
+        (data.symbol !== undefined && data.symbol !== current.symbol) ||
+        (data.currency !== undefined && data.currency !== current.currency);
+    if (!quoteChanged) return prisma.asset.update({ where: { id }, data, omit: ASSET_OMIT });
+
+    // Cached price and history belong to the old symbol/currency: drop them and fetch fresh ones.
+    const [, , updated] = await prisma.$transaction([
+        prisma.priceCache.deleteMany({ where: { assetId: id } }),
+        prisma.priceHistory.deleteMany({ where: { assetId: id } }),
+        prisma.asset.update({ where: { id }, data, omit: ASSET_OMIT }),
+    ]);
+    await fetchAndStorePrice(updated);
+    return updated;
 }
